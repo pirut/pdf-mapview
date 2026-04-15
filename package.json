@@ -1,6 +1,6 @@
 {
   "name": "pdf-mapview",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "React viewer and ingest toolkit for map-like PDF, floorplan, and large image experiences.",
   "keywords": [
     "pdf",
