@@ -1,3 +1,7 @@
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 
@@ -28,7 +32,7 @@ async function createSamplePdf() {
 }
 
 describe("ingestPdf", () => {
-  it("rasterizes a PDF page and produces a pdf manifest", async () => {
+  it("works with a Uint8Array input", async () => {
     const result = await ingestPdf({
       input: await createSamplePdf(),
       id: "pdf-plan",
@@ -39,6 +43,35 @@ describe("ingestPdf", () => {
     expect(result.manifest.id).toBe("pdf-plan");
     expect(result.manifest.source.type).toBe("pdf");
     expect(result.manifest.source.page).toBe(1);
+    expect(result.tileCount).toBeGreaterThan(0);
+  });
+
+  it("works with a Buffer input", async () => {
+    const result = await ingestPdf({
+      input: Buffer.from(await createSamplePdf()),
+      id: "pdf-plan-buffer",
+      page: 1,
+      storage: memoryStorageAdapter(),
+    });
+
+    expect(result.manifest.id).toBe("pdf-plan-buffer");
+    expect(result.tileCount).toBeGreaterThan(0);
+  });
+
+  it("works with a file path input", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pdf-map-path-"));
+    const filePath = join(dir, "sample.pdf");
+    await writeFile(filePath, Buffer.from(await createSamplePdf()));
+
+    const result = await ingestPdf({
+      input: filePath,
+      id: "pdf-plan-path",
+      page: 1,
+      storage: memoryStorageAdapter(),
+    });
+
+    expect(result.manifest.id).toBe("pdf-plan-path");
+    expect(result.manifest.source.originalFilename).toBe("sample.pdf");
     expect(result.tileCount).toBeGreaterThan(0);
   });
 });

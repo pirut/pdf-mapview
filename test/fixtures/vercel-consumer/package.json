@@ -1,0 +1,9 @@
+{
+  "name": "pdf-map-vercel-consumer-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:maps": "node ./scripts/build-maps.mjs",
+    "verify:imports": "node ./scripts/verify-imports.mjs"
+  }
+}

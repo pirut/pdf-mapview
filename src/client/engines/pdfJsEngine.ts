@@ -1,3 +1,4 @@
+import { toUint8Array } from "../../shared/bytes";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist/types/src/display/api";
 
 import { clamp01 } from "../../shared/coordinates";
@@ -22,11 +23,9 @@ export async function createPdfJsEngine(options: EngineInitOptions): Promise<Vie
     typeof file === "string"
       ? {
           url: file,
-          disableWorker: true,
         }
       : {
-          data: file instanceof ArrayBuffer ? new Uint8Array(file) : file,
-          disableWorker: true,
+          data: toUint8Array(file),
         },
   );
   const pdf = (await loadingTask.promise) as PDFDocumentProxy;

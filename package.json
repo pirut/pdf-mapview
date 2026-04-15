@@ -6,7 +6,7 @@
   "type": "module",
   "sideEffects": false,
   "main": "./dist/shared/index.cjs",
-  "module": "./dist/shared/index.mjs",
+  "module": "./dist/shared/index.js",
   "types": "./dist/shared/index.d.ts",
   "bin": {
     "pdf-map": "./dist/ingest/cli.cjs"
@@ -18,28 +18,30 @@
   "exports": {
     ".": {
       "types": "./dist/shared/index.d.ts",
-      "import": "./dist/shared/index.mjs",
+      "import": "./dist/shared/index.js",
       "require": "./dist/shared/index.cjs"
     },
     "./client": {
       "types": "./dist/client/index.d.ts",
-      "import": "./dist/client/index.mjs",
+      "import": "./dist/client/index.js",
       "require": "./dist/client/index.cjs"
     },
     "./ingest": {
       "types": "./dist/ingest/index.d.ts",
-      "import": "./dist/ingest/index.mjs",
+      "import": "./dist/ingest/index.js",
       "require": "./dist/ingest/index.cjs"
     },
     "./server": {
       "types": "./dist/server/index.d.ts",
-      "import": "./dist/server/index.mjs",
+      "import": "./dist/server/index.js",
       "require": "./dist/server/index.cjs"
     }
   },
   "scripts": {
     "build": "tsup",
     "check": "tsc --noEmit",
+    "prepare": "npm run build",
+    "prepack": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "rm -rf dist coverage .vitest"

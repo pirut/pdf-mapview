@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "kind": "pdf-map",
+  "id": "site-plan-001",
+  "source": {
+    "type": "pdf",
+    "page": 1,
+    "width": 1000,
+    "height": 800
+  },
+  "coordinateSpace": {
+    "normalized": true,
+    "width": 1000,
+    "height": 800
+  },
+  "tiles": {
+    "tileSize": 256,
+    "format": "webp",
+    "minZoom": 0,
+    "maxZoom": 0,
+    "pathTemplate": "tiles/{z}/{x}/{y}.webp",
+    "levels": [
+      {
+        "z": 0,
+        "width": 1000,
+        "height": 800,
+        "columns": 4,
+        "rows": 4,
+        "scale": 1
+      }
+    ]
+  },
+  "view": {
+    "defaultCenter": [0.5, 0.5],
+    "defaultZoom": 1,
+    "minZoom": 0,
+    "maxZoom": 4
+  }
+}
