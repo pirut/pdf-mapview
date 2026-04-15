@@ -179,19 +179,3 @@ Client code should import only from `pdf-mapview/client`, and ingest code should
 See the TanStack Start example notes:
 
 - [examples/tanstack-start/README.md](https://github.com/pirut/pdf-mapview/blob/main/examples/tanstack-start/README.md)
-
-## Publishing
-
-Before running `npm publish`, confirm:
-
-```bash
-npm test
-npm run build
-npm pack --dry-run
-```
-
-For an unscoped package:
-
-```bash
-npm publish
-```
