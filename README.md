@@ -1,13 +1,13 @@
-# `pdf-map`
+# `pdf-mapview`
 
-`pdf-map` is a React viewer and ingest toolkit for turning large PDFs, floorplans, and images into smooth, map-like experiences with static tiles, manifests, and normalized overlays.
+`pdf-mapview` is a React viewer and ingest toolkit for turning large PDFs, floorplans, and images into smooth, map-like experiences with static tiles, manifests, and normalized overlays.
 
 ## What it ships
 
-- `pdf-map`: shared types, manifest helpers, schemas
-- `pdf-map/client`: React viewer runtime
-- `pdf-map/ingest`: Node ingest APIs, storage adapters, CLI
-- `pdf-map/server`: server-safe re-export of ingest utilities
+- `pdf-mapview`: shared types, manifest helpers, schemas
+- `pdf-mapview/client`: React viewer runtime
+- `pdf-mapview/ingest`: Node ingest APIs, storage adapters, CLI
+- `pdf-mapview/server`: server-safe re-export of ingest utilities
 
 This package is not a hosted service. You can generate static tiles locally, upload them anywhere, or plug in a custom storage adapter.
 
@@ -16,7 +16,7 @@ The ingest pipeline is pure Node and uses prebuilt npm modules. PDF pages are ra
 ## Install
 
 ```bash
-npm install pdf-map react react-dom
+npm install pdf-mapview react react-dom
 ```
 
 ## Viewer usage
@@ -24,7 +24,7 @@ npm install pdf-map react react-dom
 ### Tile source
 
 ```tsx
-import { TileMapViewer } from "pdf-map/client";
+import { TileMapViewer } from "pdf-mapview/client";
 
 function Floorplan({ manifest }: { manifest: any }) {
   return (
@@ -92,7 +92,7 @@ const regions = [
 ### Local output
 
 ```ts
-import { ingestPdf, localStorageAdapter } from "pdf-map/ingest";
+import { ingestPdf, localStorageAdapter } from "pdf-mapview/ingest";
 
 const result = await ingestPdf({
   input: "./plans/site-plan.pdf",
@@ -108,7 +108,7 @@ const result = await ingestPdf({
 ### In-memory / custom upload flow
 
 ```ts
-import { ingestImage, memoryStorageAdapter } from "pdf-map/ingest";
+import { ingestImage, memoryStorageAdapter } from "pdf-mapview/ingest";
 
 const result = await ingestImage({
   input: imageBuffer,
@@ -120,7 +120,7 @@ const result = await ingestImage({
 ### S3-compatible storage
 
 ```ts
-import { ingestPdf, s3CompatibleStorageAdapter } from "pdf-map/ingest";
+import { ingestPdf, s3CompatibleStorageAdapter } from "pdf-mapview/ingest";
 
 const storage = s3CompatibleStorageAdapter({
   prefix: "maps/site-plan-001",
@@ -141,7 +141,7 @@ const result = await ingestPdf({
 ## CLI
 
 ```bash
-pdf-map ingest ./plans/site-plan.pdf \
+pdf-mapview ingest ./plans/site-plan.pdf \
   --page 1 \
   --id site-plan-001 \
   --out-dir ./public/maps/site-plan-001
@@ -174,7 +174,7 @@ Generated manifests are versioned and viewer-complete. The viewer can load tiles
 
 ## TanStack Start
 
-Client code should import only from `pdf-map/client`, and ingest code should live in server functions or build steps via `pdf-map/server`.
+Client code should import only from `pdf-mapview/client`, and ingest code should live in server functions or build steps via `pdf-mapview/server`.
 
 See the TanStack Start example notes:
 

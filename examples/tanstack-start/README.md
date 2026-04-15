@@ -6,7 +6,7 @@ This package is structured so TanStack Start can keep the viewer client-only and
 
 ```tsx
 import { ClientOnly } from "@tanstack/react-start";
-import { TileMapViewer } from "pdf-map/client";
+import { TileMapViewer } from "pdf-mapview/client";
 
 export function FloorplanClient({ manifest }: { manifest: any }) {
   return (
@@ -30,7 +30,7 @@ export function FloorplanClient({ manifest }: { manifest: any }) {
 ## Server function
 
 ```ts
-import { ingestPdf, localStorageAdapter } from "pdf-map/server";
+import { ingestPdf, localStorageAdapter } from "pdf-mapview/server";
 
 export async function buildPlanTiles() {
   return ingestPdf({
@@ -47,6 +47,6 @@ export async function buildPlanTiles() {
 
 ## Notes
 
-- `pdf-map/client` does not touch browser globals at module scope.
-- `pdf-map/server` avoids importing any client runtime.
+- `pdf-mapview/client` does not touch browser globals at module scope.
+- `pdf-mapview/server` avoids importing any client runtime.
 - Local static output is the simplest TanStack Start deployment path.

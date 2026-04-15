@@ -22,7 +22,7 @@ const installEnv = {
 
 describe("packed artifact smoke test", () => {
   it("packs, installs, and resolves exports in a minimal React 18 consumer", async () => {
-    const fixtureRoot = await mkdtemp(join(tmpdir(), "pdf-map-consumer-"));
+    const fixtureRoot = await mkdtemp(join(tmpdir(), "pdf-mapview-consumer-"));
     const packDir = join(fixtureRoot, "pack");
     const consumerDir = join(fixtureRoot, "consumer");
     await mkdir(packDir, { recursive: true });
@@ -102,7 +102,12 @@ async function replacePackageNameInTree(rootDir: string, packageName: string) {
     }
 
     const source = await readFile(entryPath, "utf8");
-    const next = source.replaceAll("@scope/pdf-map", packageName);
+    const next = source
+      .replaceAll("@scope/pdf-map", packageName)
+      .replaceAll('"pdf-mapview"', `"${packageName}"`)
+      .replaceAll('"pdf-mapview/', `"${packageName}/`)
+      .replaceAll("'pdf-mapview'", `'${packageName}'`)
+      .replaceAll("'pdf-mapview/", `'${packageName}/`);
     if (next !== source) {
       await writeFile(entryPath, next);
     }

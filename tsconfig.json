@@ -14,10 +14,10 @@
     "types": ["node", "vitest/globals"],
     "baseUrl": ".",
     "paths": {
-      "pdf-map": ["./src/shared/index.ts"],
-      "pdf-map/client": ["./src/client/index.ts"],
-      "pdf-map/ingest": ["./src/ingest/index.ts"],
-      "pdf-map/server": ["./src/server/index.ts"]
+      "pdf-mapview": ["./src/shared/index.ts"],
+      "pdf-mapview/client": ["./src/client/index.ts"],
+      "pdf-mapview/ingest": ["./src/ingest/index.ts"],
+      "pdf-mapview/server": ["./src/server/index.ts"]
     }
   },
   "include": ["src", "test", "examples", "tsup.config.ts"]

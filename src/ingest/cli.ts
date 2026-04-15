@@ -7,7 +7,7 @@ import { ingestImage } from "./ingestImage";
 import { ingestPdf } from "./ingestPdf";
 import { localStorageAdapter } from "./storage/local";
 
-const cli = cac("pdf-map");
+const cli = cac("pdf-mapview");
 
 cli
   .command("ingest <input>", "Ingest a PDF or image into a tiled map manifest")

@@ -1,5 +1,5 @@
 {
-  "name": "pdf-map",
+  "name": "pdf-mapview",
   "version": "0.1.0",
   "description": "React viewer and ingest toolkit for map-like PDF, floorplan, and large image experiences.",
   "keywords": [
@@ -33,7 +33,7 @@
   "module": "./dist/shared/index.js",
   "types": "./dist/shared/index.d.ts",
   "bin": {
-    "pdf-map": "./dist/ingest/cli.cjs"
+    "pdf-mapview": "./dist/ingest/cli.cjs"
   },
   "files": [
     "dist",

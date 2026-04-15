@@ -1,5 +1,5 @@
-import { TileMapViewer } from "pdf-map/client";
-import type { PdfMapManifest } from "pdf-map";
+import { TileMapViewer } from "pdf-mapview/client";
+import type { PdfMapManifest } from "pdf-mapview";
 import manifest from "./site-plan-manifest.json";
 
 export function FloorplanClient() {
