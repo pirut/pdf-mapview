@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { ingestPdf, localStorageAdapter } from "@scope/pdf-map/server";
+import { ingestPdf, localStorageAdapter } from "@jrbussard/pdf-map/server";
 
 async function createFixturePdf() {
   const pdf = await PDFDocument.create();
@@ -40,6 +40,7 @@ const result = await ingestPdf({
   input: fileURLToPath(pdfPath),
   id: "site-plan-001",
   page: 1,
+  rasterDpi: 144,
   storage: localStorageAdapter({
     baseDir: fileURLToPath(publicDir),
     clean: true,

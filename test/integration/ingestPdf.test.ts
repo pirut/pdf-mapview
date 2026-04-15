@@ -74,4 +74,19 @@ describe("ingestPdf", () => {
     expect(result.manifest.source.originalFilename).toBe("sample.pdf");
     expect(result.tileCount).toBeGreaterThan(0);
   });
+
+  it("supports rasterizing a PDF at a requested DPI", async () => {
+    const result = await ingestPdf({
+      input: await createSamplePdf(),
+      id: "pdf-plan-dpi",
+      page: 1,
+      rasterDpi: 144,
+      storage: memoryStorageAdapter(),
+    });
+
+    expect(result.manifest.id).toBe("pdf-plan-dpi");
+    expect(result.width).toBe(2048);
+    expect(result.height).toBe(1536);
+    expect(result.tileCount).toBeGreaterThan(0);
+  });
 });

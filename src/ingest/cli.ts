@@ -32,6 +32,7 @@ cli
   .option("--quality <quality>", "Tile quality", {
     default: 92,
   })
+  .option("--raster-dpi <rasterDpi>", "Rasterize PDF pages at a fixed DPI")
   .option("--max-dimension <maxDimension>", "Max raster dimension", {
     default: 12288,
   })
@@ -53,6 +54,7 @@ cli
       tileSize: Number(flags.tileSize) as 256 | 512,
       tileFormat: String(flags.format) as "webp" | "jpeg" | "png",
       tileQuality: Number(flags.quality),
+      rasterDpi: flags.rasterDpi ? Number(flags.rasterDpi) : undefined,
       maxDimension: Number(flags.maxDimension),
       baseUrl: flags.baseUrl ? String(flags.baseUrl) : undefined,
       storage,

@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, mkdtemp, rm } from "node:fs/promises";
+import { cp, mkdir, readFile, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
@@ -27,6 +27,7 @@ describe("packed artifact smoke test", () => {
     const consumerDir = join(fixtureRoot, "consumer");
     await mkdir(packDir, { recursive: true });
     await cp(fixtureSource, consumerDir, { recursive: true });
+    await syncFixturePackageName(consumerDir);
 
     await execFileAsync("npm", ["pack", "--json", "--pack-destination", packDir], {
       cwd: packageRoot,
@@ -64,11 +65,55 @@ describe("packed artifact smoke test", () => {
 });
 
 async function findTarball(packDir: string) {
-  const { readdir } = await import("node:fs/promises");
   const files = await readdir(packDir);
   const tarball = files.find((file) => file.endsWith(".tgz"));
   if (!tarball) {
     throw new Error("Expected npm pack to produce a tarball.");
   }
   return tarball;
+}
+
+async function syncFixturePackageName(consumerDir: string) {
+  const packageName = await readPackageName();
+  await replacePackageNameInTree(consumerDir, packageName);
+}
+
+async function readPackageName() {
+  const packageJsonPath = join(packageRoot, "package.json");
+  const packageJsonBytes = await readFile(packageJsonPath, "utf8");
+  const packageJson = JSON.parse(packageJsonBytes) as { name?: unknown };
+  if (typeof packageJson.name !== "string" || packageJson.name.length === 0) {
+    throw new Error(`Expected a non-empty package name in ${packageJsonPath}.`);
+  }
+  return packageJson.name;
+}
+
+async function replacePackageNameInTree(rootDir: string, packageName: string) {
+  const entries = await readdir(rootDir, { withFileTypes: true });
+  for (const entry of entries) {
+    const entryPath = join(rootDir, entry.name);
+    if (entry.isDirectory()) {
+      await replacePackageNameInTree(entryPath, packageName);
+      continue;
+    }
+
+    if (!(await isTextFixtureFile(entryPath))) {
+      continue;
+    }
+
+    const source = await readFile(entryPath, "utf8");
+    const next = source.replaceAll("@scope/pdf-map", packageName);
+    if (next !== source) {
+      await writeFile(entryPath, next);
+    }
+  }
+}
+
+async function isTextFixtureFile(filePath: string) {
+  const fileInfo = await stat(filePath);
+  if (!fileInfo.isFile()) {
+    return false;
+  }
+
+  return /\.(?:[cm]?[jt]sx?|json|md)$/u.test(filePath);
 }

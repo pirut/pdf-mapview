@@ -11,6 +11,7 @@ export interface RasterizePdfOptions {
   bytes: Uint8Array;
   page: number;
   maxDimension: number;
+  rasterDpi?: number;
   background: string;
 }
 
@@ -30,7 +31,12 @@ export async function rasterizePdf(options: RasterizePdfOptions): Promise<Raster
   const pdf = await loadingTask.promise;
   const page = await pdf.getPage(options.page);
   const viewport = page.getViewport({ scale: 1 });
-  const scale = Math.min(1, options.maxDimension / Math.max(viewport.width, viewport.height));
+  const scale = resolveScale({
+    viewportWidth: viewport.width,
+    viewportHeight: viewport.height,
+    maxDimension: options.maxDimension,
+    rasterDpi: options.rasterDpi,
+  });
   const scaledViewport = page.getViewport({
     scale: scale <= 0 ? 1 : scale,
   });
@@ -69,4 +75,20 @@ function installNodeCanvasGlobals() {
   if (!("Path2D" in globalThis)) {
     (globalThis as Record<string, unknown>).Path2D = Path2D;
   }
+}
+
+function resolveScale(options: {
+  viewportWidth: number;
+  viewportHeight: number;
+  maxDimension: number;
+  rasterDpi?: number;
+}) {
+  if (options.rasterDpi && Number.isFinite(options.rasterDpi) && options.rasterDpi > 0) {
+    return options.rasterDpi / 72;
+  }
+
+  return Math.min(
+    1,
+    options.maxDimension / Math.max(options.viewportWidth, options.viewportHeight),
+  );
 }

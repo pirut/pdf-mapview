@@ -66,6 +66,7 @@ export interface IngestCommonOptions {
   tileFormat?: TileFormat;
   tileQuality?: number;
   maxDimension?: number;
+  rasterDpi?: number;
   background?: string;
   overlays?: RegionCollection | string;
   baseUrl?: string;

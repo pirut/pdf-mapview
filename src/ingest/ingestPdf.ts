@@ -12,6 +12,7 @@ export async function ingestPdf(options: IngestPdfOptions): Promise<IngestResult
     bytes: inspected.bytes,
     page,
     maxDimension: options.maxDimension ?? 12288,
+    rasterDpi: options.rasterDpi,
     background: options.background ?? "#ffffff",
   });
 

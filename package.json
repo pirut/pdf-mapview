@@ -1,19 +1,47 @@
 {
-  "name": "@scope/pdf-map",
+  "name": "@jrbussard/pdf-map",
   "version": "0.1.0",
   "description": "React viewer and ingest toolkit for map-like PDF, floorplan, and large image experiences.",
-  "license": "MIT",
+  "keywords": [
+    "pdf",
+    "floorplan",
+    "tiles",
+    "deep-zoom",
+    "openseadragon",
+    "react",
+    "tanstack-start",
+    "vercel",
+    "ingest",
+    "viewer"
+  ],
+  "author": "JR Bussard",
+  "license": "0BSD",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pirut/pdf-map.git"
+  },
+  "homepage": "https://github.com/pirut/pdf-map#readme",
+  "bugs": {
+    "url": "https://github.com/pirut/pdf-map/issues"
+  },
   "type": "module",
   "sideEffects": false,
+  "engines": {
+    "node": ">=18.18.0"
+  },
   "main": "./dist/shared/index.cjs",
   "module": "./dist/shared/index.js",
   "types": "./dist/shared/index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "pdf-map": "./dist/ingest/cli.cjs"
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "exports": {
     ".": {
@@ -35,6 +63,15 @@
       "types": "./dist/server/index.d.ts",
       "import": "./dist/server/index.js",
       "require": "./dist/server/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
     }
   },
   "scripts": {
