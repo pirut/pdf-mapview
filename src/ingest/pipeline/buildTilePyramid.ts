@@ -1,5 +1,4 @@
-import { createCanvas, loadImage } from "@napi-rs/canvas";
-import type { Canvas } from "@napi-rs/canvas";
+import sharp from "sharp";
 
 import type { OutputArtifact, TileFormat } from "../../shared/ingest";
 import type { TileLevelManifest } from "../../shared/manifest";
@@ -28,7 +27,7 @@ export async function buildTilePyramid(
   );
   const levels: TileLevelManifest[] = [];
   const tiles: OutputArtifact[] = [];
-  const source = await loadImage(Buffer.from(options.image));
+  const source = Buffer.from(options.image);
 
   for (let z = 0; z <= maxZoom; z += 1) {
     const scale = 1 / 2 ** (maxZoom - z);
@@ -46,9 +45,14 @@ export async function buildTilePyramid(
       scale,
     });
 
-    const levelCanvas = createCanvas(width, height);
-    const levelContext = levelCanvas.getContext("2d");
-    levelContext.drawImage(source, 0, 0, width, height);
+    const levelBuffer = await sharp(source, { failOn: "none" })
+      .resize({
+        width,
+        height,
+        fit: "fill",
+      })
+      .png()
+      .toBuffer();
 
     for (let y = 0; y < rows; y += 1) {
       for (let x = 0; x < columns; x += 1) {
@@ -56,10 +60,15 @@ export async function buildTilePyramid(
         const top = y * options.tileSize;
         const extractWidth = Math.min(options.tileSize, width - left);
         const extractHeight = Math.min(options.tileSize, height - top);
-        const tileCanvas = createCanvas(extractWidth, extractHeight);
-        const tileContext = tileCanvas.getContext("2d");
-        tileContext.drawImage(levelCanvas, -left, -top);
-        const tileBuffer = await encodeTile(tileCanvas, options.format, options.quality);
+        const tileBuffer = await sharp(levelBuffer, { failOn: "none" })
+          .extract({
+            left,
+            top,
+            width: extractWidth,
+            height: extractHeight,
+          })
+          .toFormat(options.format, formatOptions(options.format, options.quality))
+          .toBuffer();
 
         tiles.push({
           kind: "tile",
@@ -71,14 +80,15 @@ export async function buildTilePyramid(
     }
   }
 
-  const previewScale = Math.min(1024 / options.width, 1024 / options.height, 1);
-  const previewCanvas = createCanvas(
-    Math.max(1, Math.round(options.width * previewScale)),
-    Math.max(1, Math.round(options.height * previewScale)),
-  );
-  const previewContext = previewCanvas.getContext("2d");
-  previewContext.drawImage(source, 0, 0, previewCanvas.width, previewCanvas.height);
-  const previewBuffer = await previewCanvas.encode("webp", 80);
+  const previewBuffer = await sharp(source, { failOn: "none" })
+    .resize({
+      width: 1024,
+      height: 1024,
+      fit: "inside",
+      withoutEnlargement: true,
+    })
+    .webp({ quality: 80 })
+    .toBuffer();
 
   return {
     levels,
@@ -92,15 +102,15 @@ export async function buildTilePyramid(
   };
 }
 
-async function encodeTile(canvas: Canvas, format: TileFormat, quality: number) {
+function formatOptions(format: TileFormat, quality: number) {
   switch (format) {
     case "jpeg":
-      return canvas.encode("jpeg", quality);
+      return { quality };
     case "png":
-      return canvas.encode("png");
+      return {};
     case "webp":
     default:
-      return canvas.encode("webp", quality);
+      return { quality };
   }
 }
 

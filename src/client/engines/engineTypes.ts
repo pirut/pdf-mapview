@@ -9,6 +9,7 @@ export interface EngineInitOptions {
   maxZoom?: number;
   initialView?: Partial<MapViewState>;
   onViewChange?: (view: MapViewState) => void;
+  signal?: AbortSignal;
 }
 
 export interface ViewerEngine extends ViewportController {

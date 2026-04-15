@@ -15,7 +15,12 @@ interface OpenSeadragonModule {
 export async function createOpenSeadragonEngine(
   options: EngineInitOptions,
 ): Promise<ViewerEngine> {
+  throwIfAborted(options.signal);
   const OpenSeadragon = (await import("openseadragon")) as unknown as OpenSeadragonModule;
+  throwIfAborted(options.signal);
+  if (!options.container.isConnected) {
+    throw createAbortError();
+  }
   const osd = OpenSeadragon.default;
 
   const viewer = osd({
@@ -35,12 +40,19 @@ export async function createOpenSeadragonEngine(
     },
     tileSources: createTileSource(options.source),
   });
+  if (options.signal?.aborted || !options.container.isConnected) {
+    viewer.destroy();
+    throw createAbortError();
+  }
+
+  let isOpen = false;
 
   const publish = () => {
     options.onViewChange?.(getView());
   };
 
   viewer.addHandler("open", () => {
+    isOpen = true;
     if (options.initialView?.center) {
       viewer.viewport.panTo(
         imageToViewportPoint(options.initialView.center.x, options.initialView.center.y),
@@ -56,17 +68,42 @@ export async function createOpenSeadragonEngine(
   viewer.addHandler("resize", publish);
 
   const dimensions = getDimensions(options.source);
+  const defaultView = getDefaultView(options, dimensions);
+
+  const getItem = () => {
+    const item = viewer.world.getItemAt(0);
+    return item && typeof item.viewportToImageCoordinates === "function" ? item : null;
+  };
+
+  const getContainerSize = () => {
+    const containerSize = viewer.container.getBoundingClientRect();
+    return {
+      width: containerSize.width,
+      height: containerSize.height,
+    };
+  };
 
   const imageToViewportPoint = (x: number, y: number) => {
-    const item = viewer.world.getItemAt(0);
+    const item = getItem();
+    if (!item) {
+      return new osd.Point(x, y);
+    }
     return item.imageToViewportCoordinates(x * dimensions.width, y * dimensions.height);
   };
 
   const getView = (): MapViewState => {
-    const item = viewer.world.getItemAt(0);
+    const item = getItem();
+    const containerSize = getContainerSize();
+    if (!isOpen || !item) {
+      return {
+        ...defaultView,
+        containerWidth: containerSize.width,
+        containerHeight: containerSize.height,
+      };
+    }
+
     const center = viewer.viewport.getCenter(true);
     const imageCenter = item.viewportToImageCoordinates(center);
-    const containerSize = viewer.container.getBoundingClientRect();
     return {
       center: {
         x: clamp01(imageCenter.x / dimensions.width),
@@ -83,6 +120,9 @@ export async function createOpenSeadragonEngine(
   const engine: ViewerEngine = {
     getView,
     setView(view, transitionOptions) {
+      if (!isOpen || !getItem()) {
+        return;
+      }
       if (view.center) {
         viewer.viewport.panTo(
           imageToViewportPoint(view.center.x, view.center.y),
@@ -95,13 +135,16 @@ export async function createOpenSeadragonEngine(
       publish();
     },
     fitToBounds(bounds, transitionOptions) {
+      const item = getItem();
+      if (!isOpen || !item) {
+        return;
+      }
       if (!bounds) {
         viewer.viewport.goHome(transitionOptions?.immediate ?? false);
         publish();
         return;
       }
 
-      const item = viewer.world.getItemAt(0);
       const topLeft = item.imageToViewportCoordinates(
         bounds.x * dimensions.width,
         bounds.y * dimensions.height,
@@ -123,11 +166,18 @@ export async function createOpenSeadragonEngine(
       publish();
     },
     screenToNormalized(point: ScreenPoint) {
+      const item = getItem();
+      if (!isOpen || !item) {
+        const size = getContainerSize();
+        return {
+          x: size.width > 0 ? clamp01(point.x / size.width) : 0,
+          y: size.height > 0 ? clamp01(point.y / size.height) : 0,
+        };
+      }
       const viewportPoint = viewer.viewport.pointFromPixel(
         new osd.Point(point.x, point.y),
         true,
       );
-      const item = viewer.world.getItemAt(0);
       const imagePoint = item.viewportToImageCoordinates(viewportPoint);
       return {
         x: clamp01(imagePoint.x / dimensions.width),
@@ -135,6 +185,13 @@ export async function createOpenSeadragonEngine(
       };
     },
     normalizedToScreen(point: NormalizedPoint) {
+      if (!isOpen || !getItem()) {
+        const size = getContainerSize();
+        return {
+          x: point.x * size.width,
+          y: point.y * size.height,
+        };
+      }
       const viewportPoint = imageToViewportPoint(point.x, point.y);
       const pixel = viewer.viewport.pixelFromPoint(viewportPoint, true);
       return {
@@ -143,6 +200,7 @@ export async function createOpenSeadragonEngine(
       };
     },
     destroy() {
+      isOpen = false;
       viewer.destroy();
     },
     resize() {
@@ -155,6 +213,45 @@ export async function createOpenSeadragonEngine(
   };
 
   return engine;
+}
+
+function throwIfAborted(signal?: AbortSignal) {
+  if (signal?.aborted) {
+    throw createAbortError();
+  }
+}
+
+function createAbortError() {
+  const error = new Error("Viewer initialization aborted.");
+  error.name = "AbortError";
+  return error;
+}
+
+function getDefaultView(
+  options: EngineInitOptions,
+  dimensions: { width: number; height: number },
+): MapViewState {
+  const manifestView = options.source.type === "tiles" ? options.source.manifest.view : undefined;
+
+  return {
+    center: options.initialView?.center ?? normalizedCenterFromSource(options.source),
+    zoom: options.initialView?.zoom ?? manifestView?.defaultZoom ?? 1,
+    minZoom: options.minZoom ?? manifestView?.minZoom ?? 0,
+    maxZoom: options.maxZoom ?? manifestView?.maxZoom ?? 8,
+    containerWidth: dimensions.width,
+    containerHeight: dimensions.height,
+  };
+}
+
+function normalizedCenterFromSource(source: EngineInitOptions["source"]) {
+  if (source.type === "tiles") {
+    return {
+      x: source.manifest.view.defaultCenter[0],
+      y: source.manifest.view.defaultCenter[1],
+    };
+  }
+
+  return { x: 0.5, y: 0.5 };
 }
 
 function createTileSource(source: EngineInitOptions["source"]) {

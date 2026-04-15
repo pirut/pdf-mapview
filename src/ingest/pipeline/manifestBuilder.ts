@@ -78,9 +78,39 @@ function withBaseUrl(baseUrl: string | undefined, path: string) {
     return path;
   }
 
-  return new URL(path.replace(/^\//, ""), ensureTrailingSlash(baseUrl)).toString();
+  if (/^https?:\/\//.test(baseUrl)) {
+    return new URL(path.replace(/^\//, ""), ensureTrailingSlash(baseUrl)).toString();
+  }
+
+  return joinRelativeUrl(baseUrl, path);
 }
 
 function ensureTrailingSlash(baseUrl: string) {
   return baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+}
+
+function joinRelativeUrl(baseUrl: string, path: string) {
+  const normalizedBase = ensureLeadingSlash(stripTrailingSlash(baseUrl));
+  const normalizedPath = stripLeadingSlash(path);
+
+  if (!normalizedPath) {
+    return normalizedBase || "/";
+  }
+
+  return normalizedBase ? `${normalizedBase}/${normalizedPath}` : `/${normalizedPath}`;
+}
+
+function stripLeadingSlash(value: string) {
+  return value.replace(/^\/+/, "");
+}
+
+function stripTrailingSlash(value: string) {
+  return value.replace(/\/+$/, "");
+}
+
+function ensureLeadingSlash(value: string) {
+  if (!value) {
+    return "";
+  }
+  return value.startsWith("/") ? value : `/${value}`;
 }

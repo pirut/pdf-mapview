@@ -18,7 +18,6 @@ export class MapController implements ViewportController {
 
   attachEngine(engine: ViewerEngine): void {
     this.engine = engine;
-    this.store.setState(engine.getView());
   }
 
   detachEngine(engine: ViewerEngine): void {

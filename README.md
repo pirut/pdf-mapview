@@ -11,6 +11,8 @@
 
 This package is not a hosted service. You can generate static tiles locally, upload them anywhere, or plug in a custom storage adapter.
 
+The ingest pipeline is pure Node and uses prebuilt npm modules. PDF pages are rasterized with `pdfjs-dist` plus `@napi-rs/canvas`, and image normalization, resizing, tile generation, and preview generation are handled by `sharp`. There is no required system CLI or hosted backend.
+
 ## Install
 
 ```bash

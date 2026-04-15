@@ -17,7 +17,12 @@ export async function createPdfJsEngine(options: EngineInitOptions): Promise<Vie
     throw new Error("PDF.js engine only supports PDF sources.");
   }
 
+  throwIfAborted(options.signal);
   const pdfjs = (await import("pdfjs-dist/build/pdf.mjs")) as PdfJsModule;
+  throwIfAborted(options.signal);
+  if (!options.container.isConnected) {
+    throw createAbortError();
+  }
   const file = options.source.file;
   const loadingTask = pdfjs.getDocument(
     typeof file === "string"
@@ -29,6 +34,11 @@ export async function createPdfJsEngine(options: EngineInitOptions): Promise<Vie
         },
   );
   const pdf = (await loadingTask.promise) as PDFDocumentProxy;
+  if (options.signal?.aborted || !options.container.isConnected) {
+    loadingTask.destroy?.();
+    await pdf.destroy();
+    throw createAbortError();
+  }
   const page = (await pdf.getPage(options.source.page ?? 1)) as PDFPageProxy;
 
   const canvas = document.createElement("canvas");
@@ -219,4 +229,16 @@ export async function createPdfJsEngine(options: EngineInitOptions): Promise<Vie
   };
 
   return engine;
+}
+
+function throwIfAborted(signal?: AbortSignal) {
+  if (signal?.aborted) {
+    throw createAbortError();
+  }
+}
+
+function createAbortError() {
+  const error = new Error("Viewer initialization aborted.");
+  error.name = "AbortError";
+  return error;
 }

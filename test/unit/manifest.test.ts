@@ -77,4 +77,44 @@ describe("manifest helpers", () => {
       }),
     ).toBe("https://cdn.example.com/maps/site-plan-001/tiles/1/2/3.webp");
   });
+
+  it("resolves relative tile urls against a root-based base url", () => {
+    const manifest = createManifest({
+      id: "site-plan-001",
+      source: {
+        type: "image",
+        width: 1000,
+        height: 1000,
+      },
+      coordinateSpace: {
+        normalized: true,
+        width: 1000,
+        height: 1000,
+      },
+      tiles: {
+        tileSize: 256,
+        format: "webp",
+        minZoom: 0,
+        maxZoom: 1,
+        pathTemplate: "tiles/{z}/{x}/{y}.webp",
+        levels: [{ z: 0, width: 1000, height: 1000, columns: 4, rows: 4, scale: 1 }],
+      },
+      view: {
+        defaultCenter: [0.5, 0.5],
+        defaultZoom: 1,
+        minZoom: 0,
+        maxZoom: 6,
+      },
+    });
+
+    expect(
+      resolveTileUrl({
+        manifest,
+        z: 0,
+        x: 0,
+        y: 0,
+        baseUrl: "/maps/site-plan-001",
+      }),
+    ).toBe("/maps/site-plan-001/tiles/0/0/0.webp");
+  });
 });

@@ -159,9 +159,39 @@ export function resolveTileUrl(args: ResolveTileUrlArgs): string {
     return relative;
   }
 
-  return new URL(relative.replace(/^\//, ""), ensureTrailingSlash(args.baseUrl)).toString();
+  if (/^https?:\/\//.test(args.baseUrl)) {
+    return new URL(relative.replace(/^\//, ""), ensureTrailingSlash(args.baseUrl)).toString();
+  }
+
+  return joinRelativeUrl(args.baseUrl, relative);
 }
 
 function ensureTrailingSlash(value: string): string {
   return value.endsWith("/") ? value : `${value}/`;
+}
+
+function joinRelativeUrl(baseUrl: string, path: string): string {
+  const normalizedBase = ensureLeadingSlash(stripTrailingSlash(baseUrl));
+  const normalizedPath = stripLeadingSlash(path);
+
+  if (!normalizedPath) {
+    return normalizedBase || "/";
+  }
+
+  return normalizedBase ? `${normalizedBase}/${normalizedPath}` : `/${normalizedPath}`;
+}
+
+function stripLeadingSlash(value: string): string {
+  return value.replace(/^\/+/, "");
+}
+
+function stripTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, "");
+}
+
+function ensureLeadingSlash(value: string): string {
+  if (!value) {
+    return "";
+  }
+  return value.startsWith("/") ? value : `/${value}`;
 }

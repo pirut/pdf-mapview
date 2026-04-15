@@ -1,12 +1,24 @@
 import { cp, mkdir, readFile, mkdtemp, rm } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
 const execFileAsync = promisify(execFile);
+const testFilePath = fileURLToPath(import.meta.url);
+const testDir = dirname(testFilePath);
+const packageRoot = resolve(testDir, "../..");
+const fixtureSource = resolve(testDir, "../fixtures/vercel-consumer");
+const installEnv = {
+  ...process.env,
+  // Some local machines have a globally-installed libvips, which makes sharp
+  // choose a source-build path. The packaged artifact should still validate
+  // against the normal prebuilt sharp install used on Vercel.
+  SHARP_IGNORE_GLOBAL_LIBVIPS: "1",
+};
 
 describe("packed artifact smoke test", () => {
   it("packs, installs, and resolves exports in a minimal React 18 consumer", async () => {
@@ -14,10 +26,11 @@ describe("packed artifact smoke test", () => {
     const packDir = join(fixtureRoot, "pack");
     const consumerDir = join(fixtureRoot, "consumer");
     await mkdir(packDir, { recursive: true });
-    await cp(resolve("test/fixtures/vercel-consumer"), consumerDir, { recursive: true });
+    await cp(fixtureSource, consumerDir, { recursive: true });
 
     await execFileAsync("npm", ["pack", "--json", "--pack-destination", packDir], {
-      cwd: resolve("."),
+      cwd: packageRoot,
+      env: installEnv,
     });
 
     const tarballName = await findTarball(packDir);
@@ -32,11 +45,11 @@ describe("packed artifact smoke test", () => {
         "react-dom@18.3.1",
         "pdf-lib@1.17.1",
       ],
-      { cwd: consumerDir },
+      { cwd: consumerDir, env: installEnv },
     );
 
-    await execFileAsync("npm", ["run", "verify:imports"], { cwd: consumerDir });
-    await execFileAsync("npm", ["run", "build:maps"], { cwd: consumerDir });
+    await execFileAsync("npm", ["run", "verify:imports"], { cwd: consumerDir, env: installEnv });
+    await execFileAsync("npm", ["run", "build:maps"], { cwd: consumerDir, env: installEnv });
 
     const manifestBytes = await readFile(
       join(consumerDir, "public", "maps", "site-plan-001", "manifest.json"),

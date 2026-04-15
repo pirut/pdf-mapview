@@ -55,6 +55,7 @@
     "cac": "^6.7.14",
     "openseadragon": "^5.0.1",
     "pdfjs-dist": "^4.10.38",
+    "sharp": "^0.34.4",
     "zod": "^3.24.1"
   },
   "devDependencies": {
