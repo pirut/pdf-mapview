@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { ingestPdf, localStorageAdapter } from "@jrbussard/pdf-map/server";
+import { ingestPdf, localStorageAdapter } from "pdf-map/server";
 
 async function createFixturePdf() {
   const pdf = await PDFDocument.create();

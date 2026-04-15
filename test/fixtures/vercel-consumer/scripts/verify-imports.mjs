@@ -1,6 +1,6 @@
-import { parseManifest } from "@jrbussard/pdf-map";
-import { TileMapViewer } from "@jrbussard/pdf-map/client";
-import { ingestPdf } from "@jrbussard/pdf-map/server";
+import { parseManifest } from "pdf-map";
+import { TileMapViewer } from "pdf-map/client";
+import { ingestPdf } from "pdf-map/server";
 
 if (typeof TileMapViewer !== "object") {
   throw new Error("Expected TileMapViewer export to resolve.");
