@@ -19,5 +19,6 @@ export default defineConfig([
     treeshake: true,
     minify: false,
     external: ["react", "react-dom"],
+    onSuccess: "node scripts/copy-pdf-worker.mjs",
   },
 ]);

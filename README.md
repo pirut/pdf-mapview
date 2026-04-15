@@ -57,11 +57,14 @@ function Floorplan({ manifest }: { manifest: any }) {
 ### PDF fallback source
 
 ```tsx
+import { pdfWorkerUrl } from "pdf-mapview";
+
 <TileMapViewer
   source={{
     type: "pdf",
     file: "/plan.pdf",
     page: 1,
+    workerSrc: pdfWorkerUrl,
   }}
 />
 ```

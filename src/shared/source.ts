@@ -28,6 +28,7 @@ export interface PdfSource {
   type: "pdf";
   file: string | Uint8Array | ArrayBuffer;
   page?: number;
+  workerSrc?: string;
 }
 
 export type PdfMapSource = TilesSource | ImageSource | PdfSource;

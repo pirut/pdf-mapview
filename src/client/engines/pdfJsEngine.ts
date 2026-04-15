@@ -1,4 +1,5 @@
 import { toUint8Array } from "../../shared/bytes";
+import { pdfWorkerUrl } from "../../shared/pdfWorkerUrl";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist/types/src/display/api";
 
 import { clamp01 } from "../../shared/coordinates";
@@ -6,6 +7,9 @@ import type { MapViewState, ScreenPoint, ViewTransitionOptions } from "../../sha
 import type { EngineInitOptions, ViewerEngine } from "./engineTypes";
 
 interface PdfJsModule {
+  GlobalWorkerOptions: {
+    workerSrc: string;
+  };
   getDocument: (src: unknown) => {
     promise: Promise<any>;
     destroy?: () => void;
@@ -18,11 +22,18 @@ export async function createPdfJsEngine(options: EngineInitOptions): Promise<Vie
   }
 
   throwIfAborted(options.signal);
-  const pdfjs = (await import("pdfjs-dist/build/pdf.mjs")) as PdfJsModule;
+  const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as PdfJsModule;
   throwIfAborted(options.signal);
   if (!options.container.isConnected) {
     throw createAbortError();
   }
+  const workerSrc = options.source.workerSrc ?? pdfWorkerUrl;
+  if (!workerSrc) {
+    throw new Error(
+      "PDF sources require a configured worker URL. Pass source.workerSrc or use pdfWorkerUrl from pdf-mapview.",
+    );
+  }
+  pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
   const file = options.source.file;
   const loadingTask = pdfjs.getDocument(
     typeof file === "string"

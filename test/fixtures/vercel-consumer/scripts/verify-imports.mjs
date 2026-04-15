@@ -1,4 +1,4 @@
-import { parseManifest } from "pdf-mapview";
+import { parseManifest, pdfWorkerUrl } from "pdf-mapview";
 import { TileMapViewer } from "pdf-mapview/client";
 import { ingestPdf } from "pdf-mapview/server";
 
@@ -8,6 +8,10 @@ if (typeof TileMapViewer !== "object") {
 
 if (typeof ingestPdf !== "function") {
   throw new Error("Expected ingestPdf export to resolve.");
+}
+
+if (typeof pdfWorkerUrl !== "string" || pdfWorkerUrl.length === 0) {
+  throw new Error("Expected pdfWorkerUrl export to resolve.");
 }
 
 const manifest = parseManifest({
