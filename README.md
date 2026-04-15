@@ -178,7 +178,7 @@ Client code should import only from `pdf-mapview/client`, and ingest code should
 
 See the TanStack Start example notes:
 
-- [examples/tanstack-start/README.md](https://github.com/pirut/pdf-map/blob/main/examples/tanstack-start/README.md)
+- [examples/tanstack-start/README.md](https://github.com/pirut/pdf-mapview/blob/main/examples/tanstack-start/README.md)
 
 ## Publishing
 

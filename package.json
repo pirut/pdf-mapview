@@ -18,11 +18,11 @@
   "license": "0BSD",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pirut/pdf-map.git"
+    "url": "git+https://github.com/pirut/pdf-mapview.git"
   },
-  "homepage": "https://github.com/pirut/pdf-map#readme",
+  "homepage": "https://github.com/pirut/pdf-mapview#readme",
   "bugs": {
-    "url": "https://github.com/pirut/pdf-map/issues"
+    "url": "https://github.com/pirut/pdf-mapview/issues"
   },
   "type": "module",
   "sideEffects": false,
