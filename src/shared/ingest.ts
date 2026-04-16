@@ -34,6 +34,16 @@ export interface WriteTileArgs {
   contentType: string;
 }
 
+export interface WriteTileFileArgs {
+  z: number;
+  x: number;
+  y: number;
+  ext: string;
+  filePath: string;
+  size: number;
+  contentType: string;
+}
+
 export interface WriteManifestArgs {
   path: string;
   bytes: Uint8Array;
@@ -47,6 +57,14 @@ export interface WriteAssetArgs {
   contentType: string;
 }
 
+export interface WriteAssetFileArgs {
+  kind: "preview" | "overlay";
+  path: string;
+  filePath: string;
+  size: number;
+  contentType: string;
+}
+
 export interface FinalizeStorageArgs {
   manifest: PdfMapManifest;
   artifacts: StoredArtifact[];
@@ -54,8 +72,10 @@ export interface FinalizeStorageArgs {
 
 export interface StorageAdapter {
   writeTile(args: WriteTileArgs): Promise<StoredArtifact>;
+  writeTileFile?(args: WriteTileFileArgs): Promise<StoredArtifact>;
   writeManifest(args: WriteManifestArgs): Promise<StoredArtifact>;
   writeAsset?(args: WriteAssetArgs): Promise<StoredArtifact>;
+  writeAssetFile?(args: WriteAssetFileArgs): Promise<StoredArtifact>;
   finalize(args: FinalizeStorageArgs): Promise<StorageFinalizeResult>;
 }
 
@@ -71,6 +91,8 @@ export interface IngestCommonOptions {
   overlays?: RegionCollection | string;
   baseUrl?: string;
   storage?: StorageAdapter;
+  retainFilesInResult?: boolean;
+  writeConcurrency?: number;
 }
 
 export interface IngestPdfOptions extends IngestCommonOptions {

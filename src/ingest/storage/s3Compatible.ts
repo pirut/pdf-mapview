@@ -25,7 +25,6 @@ export function s3CompatibleStorageAdapter(
   options: S3CompatibleAdapterOptions,
 ): StorageAdapter {
   const prefix = normalizePrefix(options.prefix);
-  const artifacts: StoredArtifact[] = [];
 
   const upload = async (
     kind: StoredArtifact["kind"],
@@ -41,15 +40,13 @@ export function s3CompatibleStorageAdapter(
       contentType,
       cacheControl,
     });
-    const artifact: StoredArtifact = {
+    return {
       kind,
       path: key,
       contentType,
       size: bytes.byteLength,
       url: result?.url ?? (options.baseUrl ? `${normalizeBaseUrl(options.baseUrl)}${key}` : undefined),
     };
-    artifacts.push(artifact);
-    return artifact;
   };
 
   return {
@@ -72,9 +69,9 @@ export function s3CompatibleStorageAdapter(
           : "public, max-age=60";
       return upload(args.kind, args.path, args.contentType, args.bytes, cacheControl);
     },
-    async finalize(_args: FinalizeStorageArgs): Promise<StorageFinalizeResult> {
+    async finalize(args: FinalizeStorageArgs): Promise<StorageFinalizeResult> {
       return {
-        artifacts: [...artifacts],
+        artifacts: [...args.artifacts],
         baseUrl: options.baseUrl,
       };
     },

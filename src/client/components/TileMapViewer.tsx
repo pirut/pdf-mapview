@@ -157,14 +157,25 @@ export const TileMapViewer = forwardRef<MapApi, TileMapViewerProps>(function Til
 
     void createEngine();
 
+    let resizeRafId: number | null = null;
     const resizeObserver = new ResizeObserver(() => {
-      controller.resize();
+      if (resizeRafId !== null) {
+        return;
+      }
+      resizeRafId = requestAnimationFrame(() => {
+        resizeRafId = null;
+        controller.resize();
+      });
     });
     resizeObserver.observe(container);
 
     return () => {
       abortController.abort();
       resizeObserver.disconnect();
+      if (resizeRafId !== null) {
+        cancelAnimationFrame(resizeRafId);
+        resizeRafId = null;
+      }
       if (activeEngine) {
         controller.detachEngine(activeEngine);
         activeEngine.destroy();

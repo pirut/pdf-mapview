@@ -55,3 +55,4 @@ export async function buildPlanTiles() {
 - `pdf-mapview/client` does not touch browser globals at module scope.
 - `pdf-mapview/server` avoids importing any client runtime.
 - Local static output is the simplest TanStack Start deployment path.
+- For production ingest running inside a server function, pass `retainFilesInResult: false` — the adapter has already written everything to disk, and skipping the read-back keeps memory usage flat on large maps.

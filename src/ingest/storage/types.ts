@@ -4,6 +4,8 @@ export type {
   StorageFinalizeResult,
   StoredArtifact,
   WriteAssetArgs,
+  WriteAssetFileArgs,
   WriteManifestArgs,
   WriteTileArgs,
+  WriteTileFileArgs,
 } from "../../shared/ingest";

@@ -9,22 +9,18 @@ import type {
 } from "../../shared/ingest";
 
 export function memoryStorageAdapter(): StorageAdapter {
-  const artifacts: StoredArtifact[] = [];
-
   const record = (
     kind: StoredArtifact["kind"],
     path: string,
     contentType: string,
     bytes: Uint8Array,
   ): StoredArtifact => {
-    const artifact = {
+    return {
       kind,
       path,
       contentType,
       size: bytes.byteLength,
     } satisfies StoredArtifact;
-    artifacts.push(artifact);
-    return artifact;
   };
 
   return {
@@ -37,9 +33,9 @@ export function memoryStorageAdapter(): StorageAdapter {
     async writeAsset(args: WriteAssetArgs) {
       return record(args.kind, args.path, args.contentType, args.bytes);
     },
-    async finalize(_args: FinalizeStorageArgs): Promise<StorageFinalizeResult> {
+    async finalize(args: FinalizeStorageArgs): Promise<StorageFinalizeResult> {
       return {
-        artifacts: [...artifacts],
+        artifacts: [...args.artifacts],
       };
     },
   };

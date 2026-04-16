@@ -1,16 +1,18 @@
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import * as fs from "node:fs/promises";
 import { basename, join, relative, sep } from "node:path";
 import { tmpdir } from "node:os";
 
 import sharp from "sharp";
 
-import type { OutputArtifact, TileFormat } from "../../shared/ingest";
+import type { TileFormat } from "../../shared/ingest";
 import type { TileLevelManifest } from "../../shared/manifest";
+import type { GeneratedAssetFile, GeneratedTileFile } from "./generatedArtifacts";
 
 export interface TileBuildResult {
   levels: TileLevelManifest[];
-  tiles: OutputArtifact[];
-  preview: OutputArtifact;
+  tiles: GeneratedTileFile[];
+  preview: GeneratedAssetFile;
+  cleanup: () => Promise<void>;
 }
 
 export interface BuildTilePyramidOptions {
@@ -25,47 +27,62 @@ export interface BuildTilePyramidOptions {
 export async function buildTilePyramid(
   options: BuildTilePyramidOptions,
 ): Promise<TileBuildResult> {
-  const source = Buffer.from(options.image);
+  const source = Buffer.from(
+    options.image.buffer,
+    options.image.byteOffset,
+    options.image.byteLength,
+  );
   const levels = buildTileLevels(options.width, options.height, options.tileSize);
-  const tempDir = await mkdtemp(join(tmpdir(), "pdf-map-tiles-"));
+  const tempDir = await fs.mkdtemp(join(tmpdir(), "pdf-map-tiles-"));
   const tileOutputPath = join(tempDir, "tiles.dz");
   const tileRootDir = join(tempDir, basename(tileOutputPath, ".dz"));
+  const previewOutputPath = join(tempDir, "preview.webp");
+  const cleanup = () => fs.rm(tempDir, { recursive: true, force: true });
 
-  let tiles: OutputArtifact[];
   try {
-    await sharp(source, { failOn: "none" })
-      .toFormat(options.format, formatOptions(options.format, options.quality))
-      .tile({
-        size: options.tileSize,
-        layout: "google",
-      })
-      .toFile(tileOutputPath);
+    const base = sharp(source, { failOn: "none" });
 
-    tiles = await collectGeneratedTiles(tileRootDir, options.format);
-  } finally {
-    await rm(tempDir, { recursive: true, force: true });
+    await Promise.all([
+      base
+        .clone()
+        .toFormat(options.format, formatOptions(options.format, options.quality))
+        .tile({
+          size: options.tileSize,
+          layout: "google",
+        })
+        .toFile(tileOutputPath),
+      base
+        .clone()
+        .resize({
+          width: 1024,
+          height: 1024,
+          fit: "inside",
+          withoutEnlargement: true,
+        })
+        .webp({ quality: 80 })
+        .toFile(previewOutputPath),
+    ]);
+
+    const [tiles, preview] = await Promise.all([
+      collectGeneratedTiles(tileRootDir, options.format),
+      createGeneratedAssetFile({
+        kind: "preview",
+        path: "preview.webp",
+        filePath: previewOutputPath,
+        contentType: "image/webp",
+      }),
+    ]);
+
+    return {
+      levels,
+      tiles,
+      preview,
+      cleanup,
+    };
+  } catch (error) {
+    await cleanup();
+    throw error;
   }
-
-  const previewBuffer = await sharp(source, { failOn: "none" })
-    .resize({
-      width: 1024,
-      height: 1024,
-      fit: "inside",
-      withoutEnlargement: true,
-    })
-    .webp({ quality: 80 })
-    .toBuffer();
-
-  return {
-    levels,
-    tiles,
-    preview: {
-      kind: "preview",
-      path: "preview.webp",
-      contentType: "image/webp",
-      bytes: new Uint8Array(previewBuffer),
-    },
-  };
 }
 
 function buildTileLevels(width: number, height: number, tileSize: number): TileLevelManifest[] {
@@ -93,34 +110,25 @@ function buildTileLevels(width: number, height: number, tileSize: number): TileL
 async function collectGeneratedTiles(
   tileRootDir: string,
   format: TileFormat,
-): Promise<OutputArtifact[]> {
+): Promise<GeneratedTileFile[]> {
   const paths = await collectTileFilePaths(tileRootDir);
   const ext = extensionForFormat(format);
   const contentType = contentTypeForFormat(format);
-  const tiles: Array<
-    OutputArtifact & {
-      z: number;
-      x: number;
-      y: number;
-    }
-  > = [];
-
-  for (const path of paths) {
-    const bytes = await readFile(path.filePath);
-    tiles.push({
-      z: path.z,
-      x: path.x,
-      y: path.y,
-      kind: "tile",
-      path: `tiles/${path.z}/${path.x}/${path.y}.${ext}`,
-      contentType,
-      bytes: new Uint8Array(bytes),
-    });
-  }
+  const tiles: GeneratedTileFile[] = paths.map((path) => ({
+    z: path.z,
+    x: path.x,
+    y: path.y,
+    kind: "tile",
+    ext,
+    path: `tiles/${path.z}/${path.x}/${path.y}.${ext}`,
+    filePath: path.filePath,
+    size: path.size,
+    contentType,
+  }));
 
   tiles.sort((left, right) => left.z - right.z || left.x - right.x || left.y - right.y);
 
-  return tiles.map(({ z: _z, x: _x, y: _y, ...tile }) => tile);
+  return tiles;
 }
 
 async function collectTileFilePaths(tileRootDir: string): Promise<
@@ -129,6 +137,7 @@ async function collectTileFilePaths(tileRootDir: string): Promise<
     z: number;
     x: number;
     y: number;
+    size: number;
   }>
 > {
   const tiles: Array<{
@@ -136,10 +145,11 @@ async function collectTileFilePaths(tileRootDir: string): Promise<
     z: number;
     x: number;
     y: number;
+    size: number;
   }> = [];
 
   async function walk(dir: string) {
-    const entries = await readdir(dir, { withFileTypes: true });
+    const entries = await fs.readdir(dir, { withFileTypes: true });
 
     for (const entry of entries) {
       const filePath = join(dir, entry.name);
@@ -158,11 +168,13 @@ async function collectTileFilePaths(tileRootDir: string): Promise<
         throw new Error(`Unexpected generated tile path: ${relativePath}`);
       }
 
+      const stats = await fs.stat(filePath);
       tiles.push({
         filePath,
         z: Number(match[1]),
         x: Number(match[2]),
         y: Number(match[3]),
+        size: stats.size,
       });
     }
   }
@@ -174,6 +186,23 @@ async function collectTileFilePaths(tileRootDir: string): Promise<
 
 function isIgnoredTileHelper(relativePath: string): boolean {
   return relativePath === "blank.png" || relativePath === "vips-properties.xml";
+}
+
+async function createGeneratedAssetFile(options: {
+  kind: "preview" | "overlay";
+  path: string;
+  filePath: string;
+  contentType: string;
+}): Promise<GeneratedAssetFile> {
+  const stats = await fs.stat(options.filePath);
+
+  return {
+    kind: options.kind,
+    path: options.path,
+    filePath: options.filePath,
+    size: stats.size,
+    contentType: options.contentType,
+  };
 }
 
 function formatOptions(format: TileFormat, quality: number) {

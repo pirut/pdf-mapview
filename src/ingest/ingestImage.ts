@@ -1,3 +1,4 @@
+import * as fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 
 import type {
@@ -9,6 +10,9 @@ import type {
 import type { RegionCollection } from "../shared/overlays";
 import type { PdfRasterizationManifest } from "../shared/manifest";
 import { memoryStorageAdapter } from "./storage/memory";
+import { mapWithConcurrency, resolveConcurrency } from "./pipeline/concurrency";
+import type { PersistableArtifact } from "./pipeline/generatedArtifacts";
+import { isGeneratedFileArtifact } from "./pipeline/generatedArtifacts";
 import { inspectInput } from "./pipeline/inspectInput";
 import { normalizeImage } from "./pipeline/normalizeImage";
 import { buildTilePyramid } from "./pipeline/buildTilePyramid";
@@ -51,6 +55,7 @@ export async function ingestRasterizedImage(
   const tileFormat = input.common.tileFormat ?? "webp";
   const tileQuality = input.common.tileQuality ?? 92;
   const storage = input.common.storage ?? memoryStorageAdapter();
+  const retainFilesInResult = input.common.retainFilesInResult !== false;
 
   const pyramid = await buildTilePyramid({
     image: normalized.bytes,
@@ -82,31 +87,46 @@ export async function ingestRasterizedImage(
     previewPath: pyramid.preview.path,
   });
 
-  const files: OutputArtifact[] = [...pyramid.tiles, pyramid.preview];
+  const filesToWrite: PersistableArtifact[] = [...pyramid.tiles, pyramid.preview];
 
   if (overlayPayload.file) {
-    files.push(overlayPayload.file);
+    filesToWrite.push(overlayPayload.file);
   }
 
-  files.push({
+  filesToWrite.push({
     kind: "manifest",
     path: "manifest.json",
     contentType: "application/json",
     bytes: new TextEncoder().encode(JSON.stringify(manifest, null, 2)),
   });
 
-  const { uploaded, storage: storageResult } = await writeArtifacts(storage, manifest, files);
+  try {
+    const { uploaded, storage: storageResult } = await writeArtifacts(
+      storage,
+      manifest,
+      filesToWrite,
+      {
+        writeConcurrency: input.common.writeConcurrency,
+      },
+    );
 
-  return {
-    manifest,
-    width: normalized.width,
-    height: normalized.height,
-    tileCount: pyramid.tiles.length,
-    files,
-    uploaded,
-    warnings: [],
-    storage: storageResult,
-  };
+    const files = retainFilesInResult
+      ? await materializeArtifacts(filesToWrite, input.common.writeConcurrency)
+      : [];
+
+    return {
+      manifest,
+      width: normalized.width,
+      height: normalized.height,
+      tileCount: pyramid.tiles.length,
+      files,
+      uploaded,
+      warnings: [],
+      storage: storageResult,
+    };
+  } finally {
+    await pyramid.cleanup();
+  }
 }
 
 async function resolveOverlayPayload(
@@ -152,4 +172,27 @@ function defaultId(seed: string) {
     .replace(/^-+|-+$/g, "");
 
   return safe || randomUUID();
+}
+
+async function materializeArtifacts(
+  files: PersistableArtifact[],
+  concurrency?: number,
+): Promise<OutputArtifact[]> {
+  return mapWithConcurrency(
+    files,
+    resolveConcurrency(concurrency),
+    async (file): Promise<OutputArtifact> => {
+      if (!isGeneratedFileArtifact(file)) {
+        return file;
+      }
+
+      const bytes = await fs.readFile(file.filePath);
+      return {
+        kind: file.kind,
+        path: file.path,
+        contentType: file.contentType,
+        bytes: new Uint8Array(bytes),
+      };
+    },
+  );
 }

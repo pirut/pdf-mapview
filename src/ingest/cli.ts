@@ -39,6 +39,15 @@ cli
   .option("--max-dimension <maxDimension>", "Max raster dimension", {
     default: 12288,
   })
+  .option(
+    "--write-concurrency <writeConcurrency>",
+    "Parallel tile/asset writes (default: min(8, cpu count))",
+  )
+  .option(
+    "--retain-files",
+    "Keep result.files populated (default). Use --no-retain-files for lower memory on large maps.",
+    { default: true },
+  )
   .action(async (input, flags) => {
     const outDir = flags.outDir ? resolve(String(flags.outDir)) : undefined;
     const storage = flags.adapter
@@ -61,6 +70,9 @@ cli
       maxDimension: Number(flags.maxDimension),
       baseUrl: flags.baseUrl ? String(flags.baseUrl) : undefined,
       storage,
+      writeConcurrency:
+        flags.writeConcurrency !== undefined ? Number(flags.writeConcurrency) : undefined,
+      retainFilesInResult: flags.retainFiles !== false,
     };
 
     const result =
