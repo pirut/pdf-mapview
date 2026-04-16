@@ -7,6 +7,7 @@ import type {
   OutputArtifact,
 } from "../shared/ingest";
 import type { RegionCollection } from "../shared/overlays";
+import type { PdfRasterizationManifest } from "../shared/manifest";
 import { memoryStorageAdapter } from "./storage/memory";
 import { inspectInput } from "./pipeline/inspectInput";
 import { normalizeImage } from "./pipeline/normalizeImage";
@@ -43,6 +44,7 @@ export async function ingestRasterizedImage(
     originalFilename?: string;
     mimeType?: string;
     page?: number;
+    rasterization?: PdfRasterizationManifest;
   },
 ): Promise<IngestResult> {
   const tileSize = input.common.tileSize ?? 256;
@@ -70,6 +72,7 @@ export async function ingestRasterizedImage(
     width: normalized.width,
     height: normalized.height,
     mimeType: input.mimeType ?? normalized.mimeType,
+    rasterization: input.rasterization,
     tileSize,
     tileFormat,
     levels: pyramid.levels,

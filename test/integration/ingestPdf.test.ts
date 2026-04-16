@@ -43,6 +43,11 @@ describe("ingestPdf", () => {
     expect(result.manifest.id).toBe("pdf-plan");
     expect(result.manifest.source.type).toBe("pdf");
     expect(result.manifest.source.page).toBe(1);
+    expect(result.manifest.source.rasterization).toMatchObject({
+      mode: "max-dimension",
+      maxDimension: 12288,
+    });
+    expect(result.manifest.source.rasterization?.effectiveDpi).toBeGreaterThan(0);
     expect(result.tileCount).toBeGreaterThan(0);
   });
 
@@ -87,6 +92,11 @@ describe("ingestPdf", () => {
     expect(result.manifest.id).toBe("pdf-plan-dpi");
     expect(result.width).toBe(2048);
     expect(result.height).toBe(1536);
+    expect(result.manifest.source.rasterization).toEqual({
+      mode: "dpi",
+      requestedDpi: 144,
+      effectiveDpi: 144,
+    });
     expect(result.tileCount).toBeGreaterThan(0);
   });
 });

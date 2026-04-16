@@ -19,6 +19,10 @@ export function FloorplanClient({ manifest }: { manifest: any }) {
               manifest,
               baseUrl: "/maps/site-plan-001",
             }}
+            openSeadragon={{
+              crossOriginPolicy: "Anonymous",
+              ajaxWithCredentials: false,
+            }}
           />
         </div>
       )}
@@ -37,6 +41,7 @@ export async function buildPlanTiles() {
     input: "./plans/site-plan.pdf",
     page: 1,
     id: "site-plan-001",
+    rasterDpi: 300,
     storage: localStorageAdapter({
       baseDir: "./public/maps/site-plan-001",
       clean: true,

@@ -1,5 +1,6 @@
 import { clamp01 } from "../../shared/coordinates";
 import { resolveTileUrl } from "../../shared/manifest";
+import type { OpenSeadragonLoadOptions } from "../../shared/source";
 import type { NormalizedPoint } from "../../shared/coordinates";
 import type { MapViewState, ScreenPoint, ViewTransitionOptions } from "../../shared/viewport";
 import type { EngineInitOptions, ViewerEngine } from "./engineTypes";
@@ -31,6 +32,8 @@ export async function createOpenSeadragonEngine(
     visibilityRatio: 1,
     constrainDuringPan: true,
     animationTime: 0.2,
+    crossOriginPolicy: options.openSeadragon?.crossOriginPolicy,
+    ajaxWithCredentials: options.openSeadragon?.ajaxWithCredentials,
     gestureSettingsMouse: {
       clickToZoom: false,
       dblClickToZoom: true,
@@ -38,7 +41,7 @@ export async function createOpenSeadragonEngine(
       flickEnabled: true,
       scrollToZoom: true,
     },
-    tileSources: createTileSource(options.source),
+    tileSources: createTileSource(options.source, options.openSeadragon),
   });
   if (options.signal?.aborted || !options.container.isConnected) {
     viewer.destroy();
@@ -254,7 +257,10 @@ function normalizedCenterFromSource(source: EngineInitOptions["source"]) {
   return { x: 0.5, y: 0.5 };
 }
 
-function createTileSource(source: EngineInitOptions["source"]) {
+function createTileSource(
+  source: EngineInitOptions["source"],
+  openSeadragon?: OpenSeadragonLoadOptions,
+) {
   if (source.type === "tiles") {
     const manifest = source.manifest;
     return {
@@ -263,6 +269,8 @@ function createTileSource(source: EngineInitOptions["source"]) {
       tileSize: manifest.tiles.tileSize,
       minLevel: manifest.tiles.minZoom,
       maxLevel: manifest.tiles.maxZoom,
+      crossOriginPolicy: openSeadragon?.crossOriginPolicy,
+      ajaxWithCredentials: openSeadragon?.ajaxWithCredentials,
       getTileUrl(level: number, x: number, y: number) {
         if (source.getTileUrl) {
           return source.getTileUrl({
@@ -288,6 +296,8 @@ function createTileSource(source: EngineInitOptions["source"]) {
       type: "image",
       url: source.src,
       buildPyramid: false,
+      crossOriginPolicy: openSeadragon?.crossOriginPolicy,
+      ajaxWithCredentials: openSeadragon?.ajaxWithCredentials,
     };
   }
 

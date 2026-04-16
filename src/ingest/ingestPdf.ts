@@ -24,6 +24,7 @@ export async function ingestPdf(options: IngestPdfOptions): Promise<IngestResult
     originalFilename: inspected.originalFilename,
     mimeType: "application/pdf",
     page,
+    rasterization: rasterized.rasterization,
   });
 }
 

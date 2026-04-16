@@ -1,6 +1,10 @@
 import type { RegionCollection } from "../../shared/overlays";
 import type { TileFormat } from "../../shared/ingest";
-import type { PdfMapManifest, TileLevelManifest } from "../../shared/manifest";
+import type {
+  PdfMapManifest,
+  PdfRasterizationManifest,
+  TileLevelManifest,
+} from "../../shared/manifest";
 import { createManifest } from "../../shared/manifest";
 
 export interface BuildManifestOptions {
@@ -12,6 +16,7 @@ export interface BuildManifestOptions {
   width: number;
   height: number;
   mimeType?: string;
+  rasterization?: PdfRasterizationManifest;
   tileSize: number;
   tileFormat: TileFormat;
   levels: TileLevelManifest[];
@@ -34,6 +39,7 @@ export function buildManifest(options: BuildManifestOptions): PdfMapManifest {
       width: options.width,
       height: options.height,
       mimeType: options.mimeType,
+      rasterization: options.sourceType === "pdf" ? options.rasterization : undefined,
     },
     coordinateSpace: {
       normalized: true,

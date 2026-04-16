@@ -41,6 +41,27 @@ function Floorplan({ manifest }: { manifest: any }) {
 }
 ```
 
+### Viewer CORS options
+
+```tsx
+<TileMapViewer
+  source={{
+    type: "tiles",
+    manifest,
+    baseUrl: "https://cdn.example.com/maps/site-plan-001",
+  }}
+  openSeadragon={{
+    crossOriginPolicy: "Anonymous",
+    ajaxWithCredentials: false,
+  }}
+/>
+```
+
+Use `crossOriginPolicy: "Anonymous"` for public CDN or static-hosted assets that send
+`Access-Control-Allow-Origin`. Use `crossOriginPolicy: "use-credentials"` together with
+`ajaxWithCredentials: true` only when the remote host requires cookies or credentialed
+CORS.
+
 ### Image source
 
 ```tsx
@@ -108,6 +129,43 @@ const result = await ingestPdf({
 });
 ```
 
+### Default PDF ingest behavior
+
+```ts
+const result = await ingestPdf({
+  input: "./plans/site-plan.pdf",
+  page: 1,
+  id: "site-plan-001",
+  storage: localStorageAdapter({
+    baseDir: "./public/maps/site-plan-001",
+    clean: true,
+  }),
+});
+```
+
+When `rasterDpi` is omitted, PDF ingest preserves the existing `maxDimension`-based
+scaling behavior. The generated manifest still records the effective raster DPI in
+`manifest.source.rasterization`.
+
+### PDF ingest with custom DPI
+
+```ts
+const result = await ingestPdf({
+  input: "./plans/site-plan.pdf",
+  page: 1,
+  id: "site-plan-001-300dpi",
+  rasterDpi: 300,
+  storage: localStorageAdapter({
+    baseDir: "./public/maps/site-plan-001-300dpi",
+    clean: true,
+  }),
+});
+```
+
+Higher DPI is useful when you need sharper text, linework, or annotation detail before
+tiling. The tradeoff is more pixels to rasterize, more memory and CPU during ingest, and
+potentially more output tiles.
+
 ### In-memory / custom upload flow
 
 ```ts
@@ -163,7 +221,12 @@ Generated manifests are versioned and viewer-complete. The viewer can load tiles
     "type": "pdf",
     "page": 1,
     "width": 12000,
-    "height": 9000
+    "height": 9000,
+    "rasterization": {
+      "mode": "dpi",
+      "requestedDpi": 300,
+      "effectiveDpi": 300
+    }
   },
   "tiles": {
     "tileSize": 256,

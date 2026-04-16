@@ -5,6 +5,15 @@ export interface RasterizedPdf {
   width: number;
   height: number;
   mimeType: string;
+  viewportWidth: number;
+  viewportHeight: number;
+  scale: number;
+  rasterization: {
+    mode: "dpi" | "max-dimension";
+    effectiveDpi: number;
+    requestedDpi?: number;
+    maxDimension?: number;
+  };
 }
 
 export interface RasterizePdfOptions {
@@ -62,6 +71,23 @@ export async function rasterizePdf(options: RasterizePdfOptions): Promise<Raster
     width: canvas.width,
     height: canvas.height,
     mimeType: "image/png",
+    viewportWidth: viewport.width,
+    viewportHeight: viewport.height,
+    scale,
+    rasterization: {
+      mode: options.rasterDpi && Number.isFinite(options.rasterDpi) && options.rasterDpi > 0
+        ? "dpi"
+        : "max-dimension",
+      effectiveDpi: scale * 72,
+      requestedDpi:
+        options.rasterDpi && Number.isFinite(options.rasterDpi) && options.rasterDpi > 0
+          ? options.rasterDpi
+          : undefined,
+      maxDimension:
+        options.rasterDpi && Number.isFinite(options.rasterDpi) && options.rasterDpi > 0
+          ? undefined
+          : options.maxDimension,
+    },
   };
 }
 

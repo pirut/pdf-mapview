@@ -13,6 +13,13 @@ export interface TileLevelManifest {
   scale: number;
 }
 
+export interface PdfRasterizationManifest {
+  mode: "dpi" | "max-dimension";
+  effectiveDpi: number;
+  requestedDpi?: number;
+  maxDimension?: number;
+}
+
 export interface PdfMapManifest {
   version: 1;
   kind: "pdf-map";
@@ -24,6 +31,7 @@ export interface PdfMapManifest {
     width: number;
     height: number;
     mimeType?: string;
+    rasterization?: PdfRasterizationManifest;
   };
   coordinateSpace: {
     normalized: true;
@@ -78,6 +86,15 @@ const tileLevelSchema = z.object({
   scale: z.number().positive(),
 });
 
+const pdfRasterizationSchema = z
+  .object({
+    mode: z.union([z.literal("dpi"), z.literal("max-dimension")]),
+    effectiveDpi: z.number().positive(),
+    requestedDpi: z.number().positive().optional(),
+    maxDimension: z.number().int().positive().optional(),
+  })
+  .optional();
+
 export const manifestSchema: z.ZodType<PdfMapManifest> = z.object({
   version: z.literal(1),
   kind: z.literal("pdf-map"),
@@ -89,6 +106,7 @@ export const manifestSchema: z.ZodType<PdfMapManifest> = z.object({
     width: z.number().int().positive(),
     height: z.number().int().positive(),
     mimeType: z.string().optional(),
+    rasterization: pdfRasterizationSchema,
   }),
   coordinateSpace: z.object({
     normalized: z.literal(true),

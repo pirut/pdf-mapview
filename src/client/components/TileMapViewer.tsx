@@ -8,7 +8,7 @@ import {
 } from "react";
 
 import type { RegionFeature, RegionCollection } from "../../shared/overlays";
-import type { PdfMapSource } from "../../shared/source";
+import type { OpenSeadragonLoadOptions, PdfMapSource } from "../../shared/source";
 import type { NormalizedRect } from "../../shared/coordinates";
 import type {
   MapPointerEvent,
@@ -35,6 +35,7 @@ export interface MapApi {
 export interface TileMapViewerProps {
   source: PdfMapSource;
   regions?: RegionCollection | RegionFeature[];
+  openSeadragon?: OpenSeadragonLoadOptions;
   initialView?: Partial<MapViewState>;
   minZoom?: number;
   maxZoom?: number;
@@ -64,6 +65,10 @@ export const TileMapViewer = forwardRef<MapApi, TileMapViewerProps>(function Til
 
   const regions = useMemo(() => normalizeRegions(props.regions), [props.regions]);
   const sourceKey = useMemo(() => getSourceKey(props.source), [props.source]);
+  const openSeadragonKey = useMemo(
+    () => JSON.stringify(props.openSeadragon ?? null),
+    [props.openSeadragon],
+  );
   const initialViewKey = useMemo(() => getInitialViewKey(props.initialView), [props.initialView]);
   const mapApi = useMemo<MapApi>(
     () => ({
@@ -128,6 +133,7 @@ export const TileMapViewer = forwardRef<MapApi, TileMapViewerProps>(function Til
                 maxZoom: props.maxZoom,
                 initialView,
                 onViewChange,
+                openSeadragon: props.openSeadragon,
                 signal: abortController.signal,
               });
 
@@ -167,7 +173,7 @@ export const TileMapViewer = forwardRef<MapApi, TileMapViewerProps>(function Til
         container.innerHTML = "";
       }
     };
-  }, [controller, initialViewKey, props.maxZoom, props.minZoom, sourceKey]);
+  }, [controller, initialViewKey, openSeadragonKey, props.maxZoom, props.minZoom, sourceKey]);
 
   return (
     <MapRuntimeContext.Provider

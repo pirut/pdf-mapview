@@ -32,7 +32,10 @@ cli
   .option("--quality <quality>", "Tile quality", {
     default: 92,
   })
-  .option("--raster-dpi <rasterDpi>", "Rasterize PDF pages at a fixed DPI")
+  .option(
+    "--raster-dpi <rasterDpi>",
+    "Rasterize PDF pages at a fixed DPI (PDF only). Omit to keep legacy max-dimension scaling.",
+  )
   .option("--max-dimension <maxDimension>", "Max raster dimension", {
     default: 12288,
   })

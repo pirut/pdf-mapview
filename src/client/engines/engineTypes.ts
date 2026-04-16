@@ -1,4 +1,5 @@
 import type { PdfMapSource } from "../../shared/source";
+import type { OpenSeadragonLoadOptions } from "../../shared/source";
 import type { MapViewState, ViewTransitionOptions, ViewportController } from "../../shared/viewport";
 import type { NormalizedRect } from "../../shared/coordinates";
 
@@ -9,6 +10,7 @@ export interface EngineInitOptions {
   maxZoom?: number;
   initialView?: Partial<MapViewState>;
   onViewChange?: (view: MapViewState) => void;
+  openSeadragon?: OpenSeadragonLoadOptions;
   signal?: AbortSignal;
 }
 

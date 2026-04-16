@@ -1,5 +1,12 @@
 import type { PdfMapManifest } from "./manifest";
 
+export type CrossOriginPolicy = false | "Anonymous" | "use-credentials";
+
+export interface OpenSeadragonLoadOptions {
+  crossOriginPolicy?: CrossOriginPolicy;
+  ajaxWithCredentials?: boolean;
+}
+
 export interface GetTileUrlArgs {
   manifest: PdfMapManifest;
   z: number;

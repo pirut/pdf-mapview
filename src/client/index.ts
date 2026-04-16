@@ -5,3 +5,4 @@ export { useViewportState } from "./hooks/useViewportState";
 export { useRegions } from "./hooks/useRegions";
 export type { RegionRenderArgs } from "./components/OverlayLayer";
 export { pdfWorkerUrl } from "../shared/pdfWorkerUrl";
+export type { CrossOriginPolicy, OpenSeadragonLoadOptions } from "../shared/source";
