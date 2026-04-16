@@ -1,3 +1,7 @@
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { basename, join, relative, sep } from "node:path";
+import { tmpdir } from "node:os";
+
 import sharp from "sharp";
 
 import type { OutputArtifact, TileFormat } from "../../shared/ingest";
@@ -21,63 +25,25 @@ export interface BuildTilePyramidOptions {
 export async function buildTilePyramid(
   options: BuildTilePyramidOptions,
 ): Promise<TileBuildResult> {
-  const maxZoom = Math.max(
-    0,
-    Math.ceil(Math.log2(Math.max(options.width, options.height) / options.tileSize)),
-  );
-  const levels: TileLevelManifest[] = [];
-  const tiles: OutputArtifact[] = [];
   const source = Buffer.from(options.image);
+  const levels = buildTileLevels(options.width, options.height, options.tileSize);
+  const tempDir = await mkdtemp(join(tmpdir(), "pdf-map-tiles-"));
+  const tileOutputPath = join(tempDir, "tiles.dz");
+  const tileRootDir = join(tempDir, basename(tileOutputPath, ".dz"));
 
-  for (let z = 0; z <= maxZoom; z += 1) {
-    const scale = 1 / 2 ** (maxZoom - z);
-    const width = Math.max(1, Math.ceil(options.width * scale));
-    const height = Math.max(1, Math.ceil(options.height * scale));
-    const columns = Math.max(1, Math.ceil(width / options.tileSize));
-    const rows = Math.max(1, Math.ceil(height / options.tileSize));
-
-    levels.push({
-      z,
-      width,
-      height,
-      columns,
-      rows,
-      scale,
-    });
-
-    const levelBuffer = await sharp(source, { failOn: "none" })
-      .resize({
-        width,
-        height,
-        fit: "fill",
+  let tiles: OutputArtifact[];
+  try {
+    await sharp(source, { failOn: "none" })
+      .toFormat(options.format, formatOptions(options.format, options.quality))
+      .tile({
+        size: options.tileSize,
+        layout: "google",
       })
-      .png()
-      .toBuffer();
+      .toFile(tileOutputPath);
 
-    for (let y = 0; y < rows; y += 1) {
-      for (let x = 0; x < columns; x += 1) {
-        const left = x * options.tileSize;
-        const top = y * options.tileSize;
-        const extractWidth = Math.min(options.tileSize, width - left);
-        const extractHeight = Math.min(options.tileSize, height - top);
-        const tileBuffer = await sharp(levelBuffer, { failOn: "none" })
-          .extract({
-            left,
-            top,
-            width: extractWidth,
-            height: extractHeight,
-          })
-          .toFormat(options.format, formatOptions(options.format, options.quality))
-          .toBuffer();
-
-        tiles.push({
-          kind: "tile",
-          path: `tiles/${z}/${x}/${y}.${extensionForFormat(options.format)}`,
-          contentType: contentTypeForFormat(options.format),
-          bytes: new Uint8Array(tileBuffer),
-        });
-      }
-    }
+    tiles = await collectGeneratedTiles(tileRootDir, options.format);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
   }
 
   const previewBuffer = await sharp(source, { failOn: "none" })
@@ -100,6 +66,114 @@ export async function buildTilePyramid(
       bytes: new Uint8Array(previewBuffer),
     },
   };
+}
+
+function buildTileLevels(width: number, height: number, tileSize: number): TileLevelManifest[] {
+  const maxZoom = Math.max(0, Math.ceil(Math.log2(Math.max(width, height) / tileSize)));
+  const levels: TileLevelManifest[] = [];
+
+  for (let z = 0; z <= maxZoom; z += 1) {
+    const scale = 1 / 2 ** (maxZoom - z);
+    const levelWidth = Math.max(1, Math.ceil(width * scale));
+    const levelHeight = Math.max(1, Math.ceil(height * scale));
+
+    levels.push({
+      z,
+      width: levelWidth,
+      height: levelHeight,
+      columns: Math.max(1, Math.ceil(levelWidth / tileSize)),
+      rows: Math.max(1, Math.ceil(levelHeight / tileSize)),
+      scale,
+    });
+  }
+
+  return levels;
+}
+
+async function collectGeneratedTiles(
+  tileRootDir: string,
+  format: TileFormat,
+): Promise<OutputArtifact[]> {
+  const paths = await collectTileFilePaths(tileRootDir);
+  const ext = extensionForFormat(format);
+  const contentType = contentTypeForFormat(format);
+  const tiles: Array<
+    OutputArtifact & {
+      z: number;
+      x: number;
+      y: number;
+    }
+  > = [];
+
+  for (const path of paths) {
+    const bytes = await readFile(path.filePath);
+    tiles.push({
+      z: path.z,
+      x: path.x,
+      y: path.y,
+      kind: "tile",
+      path: `tiles/${path.z}/${path.x}/${path.y}.${ext}`,
+      contentType,
+      bytes: new Uint8Array(bytes),
+    });
+  }
+
+  tiles.sort((left, right) => left.z - right.z || left.x - right.x || left.y - right.y);
+
+  return tiles.map(({ z: _z, x: _x, y: _y, ...tile }) => tile);
+}
+
+async function collectTileFilePaths(tileRootDir: string): Promise<
+  Array<{
+    filePath: string;
+    z: number;
+    x: number;
+    y: number;
+  }>
+> {
+  const tiles: Array<{
+    filePath: string;
+    z: number;
+    x: number;
+    y: number;
+  }> = [];
+
+  async function walk(dir: string) {
+    const entries = await readdir(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const filePath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(filePath);
+        continue;
+      }
+
+      const relativePath = relative(tileRootDir, filePath).split(sep).join("/");
+      if (isIgnoredTileHelper(relativePath)) {
+        continue;
+      }
+
+      const match = relativePath.match(/^(\d+)\/(\d+)\/(\d+)\.[^.]+$/);
+      if (!match) {
+        throw new Error(`Unexpected generated tile path: ${relativePath}`);
+      }
+
+      tiles.push({
+        filePath,
+        z: Number(match[1]),
+        x: Number(match[2]),
+        y: Number(match[3]),
+      });
+    }
+  }
+
+  await walk(tileRootDir);
+
+  return tiles;
+}
+
+function isIgnoredTileHelper(relativePath: string): boolean {
+  return relativePath === "blank.png" || relativePath === "vips-properties.xml";
 }
 
 function formatOptions(format: TileFormat, quality: number) {
