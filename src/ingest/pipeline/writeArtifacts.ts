@@ -10,6 +10,7 @@ import type { PdfMapManifest } from "../../shared/manifest";
 import { mapWithConcurrency, resolveConcurrency } from "./concurrency";
 import type { PersistableArtifact } from "./generatedArtifacts";
 import { isGeneratedFileArtifact } from "./generatedArtifacts";
+import type { ProgressReporter } from "./progressReporter";
 
 export interface WriteArtifactsResult {
   uploaded: StoredArtifact[];
@@ -18,6 +19,20 @@ export interface WriteArtifactsResult {
 
 export interface WriteArtifactsOptions {
   writeConcurrency?: number;
+  /**
+   * Optional reporter. When supplied, an `upload:artifact-complete` event is
+   * emitted after every artifact is written, with the `completedArtifacts`
+   * counter incrementing monotonically in callback-delivery order.
+   *
+   * The reporter is expected to be serialized (see `createProgressReporter`)
+   * so concurrent workers never issue overlapping callbacks.
+   */
+  report?: ProgressReporter;
+  /**
+   * Total artifact count used in emitted events. Defaults to `files.length`
+   * when omitted.
+   */
+  totalArtifacts?: number;
 }
 
 export async function writeArtifacts(
@@ -34,11 +49,34 @@ export async function writeArtifacts(
     .map((file, index) => ({ file, index }))
     .filter((entry): entry is { file: OutputArtifact; index: number } => entry.file.kind === "manifest");
 
+  const totalArtifacts = options.totalArtifacts ?? files.length;
+  const report = options.report;
+  let completedArtifacts = 0;
+
+  const reportUpload = report
+    ? async (artifact: StoredArtifact) => {
+        // Counter is incremented inside the serialized reporter call so that
+        // `completedArtifacts` matches the delivery order the consumer sees,
+        // even though the upload workers race to completion.
+        await report({
+          stage: "upload",
+          phase: "artifact-complete",
+          completedArtifacts: ++completedArtifacts,
+          totalArtifacts,
+          path: artifact.path,
+          kind: artifact.kind,
+        });
+      }
+    : undefined;
+
   await mapWithConcurrency(
     nonManifestArtifacts,
     resolveConcurrency(options.writeConcurrency),
     async ({ file, index }) => {
       uploaded[index] = await writeArtifact(adapter, file);
+      if (reportUpload) {
+        await reportUpload(uploaded[index]);
+      }
       return uploaded[index];
     },
   );
@@ -49,6 +87,9 @@ export async function writeArtifacts(
       bytes: file.bytes,
       contentType: "application/json",
     });
+    if (reportUpload) {
+      await reportUpload(uploaded[index]);
+    }
   }
 
   const orderedUploaded = uploaded.filter((artifact): artifact is StoredArtifact => Boolean(artifact));

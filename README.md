@@ -458,7 +458,89 @@ Pick `rasterDpi` when print-style fidelity matters; keep `maxDimension` when you
 | `storage`             | `StorageAdapter`          | `memoryStorageAdapter()`  | both         |
 | `writeConcurrency`    | `number`                  | `min(8, cpu count)`       | both         |
 | `retainFilesInResult` | `boolean`                 | `true`                    | both         |
+| `onProgress`          | `IngestProgressCallback`  | —                         | both         |
 | `page`                | `number`                  | `1`                       | PDF          |
+
+## Progress reporting
+
+Pass `onProgress` to observe each stage of the ingest pipeline. The callback is invoked at every milestone with a single discriminated-union event, and each call is **awaited** — the next event is never emitted until the previous callback settles. That makes it safe to sequence async side effects (e.g. database writes) off each event without worrying about ordering or overlap.
+
+```ts
+import type { IngestProgressEvent } from "pdf-mapview";
+
+await ingestPdf({
+  input: "./plans/site-plan.pdf",
+  id: "site-plan-001",
+  storage: s3Storage,
+  onProgress: async (event: IngestProgressEvent) => {
+    await recordStage(event); // runs to completion before the next event fires
+  },
+});
+```
+
+### Event order
+
+- **Image:** `tile-build:level-complete` (×N) → `upload:artifact-complete` (×M) → `finalize:complete`
+- **PDF:** `rasterize:start` → `rasterize:complete` → `tile-build:level-complete` (×N) → `upload:artifact-complete` (×M) → `finalize:complete`
+
+`totalLevels`, `totalTiles`, and `totalArtifacts` are populated on the **first event of each stage**, and their `completed*` counterparts never decrease within a stage. The terminal `tile-build` event has `completedLevels === totalLevels` and `completedTiles === totalTiles`; the terminal `upload` event has `completedArtifacts === totalArtifacts`.
+
+A thrown or rejected callback propagates out of the `ingest*` call and aborts the ingest — no upload or finalize events are delivered after the throw.
+
+> **Note.** Tile-build events are emitted after the underlying `sharp.tile()` call completes the full pyramid, not while sharp is still working. Sharp doesn't expose per-level callbacks, so the N `level-complete` events fire in rapid succession at the end of the build. The strict-ordering, known-totals, and monotonic-counter guarantees all still hold, and the weighted-progress formula below still produces a smooth progress bar.
+
+### Event shape
+
+See `IngestProgressEvent` in the package types for the full union. In summary:
+
+| Stage / phase                    | Carries                                                                 |
+| -------------------------------- | ----------------------------------------------------------------------- |
+| `rasterize` / `start`            | `effectiveDpi`, `requestedDpi?`, `maxDimension?`                        |
+| `rasterize` / `complete`         | `width`, `height`, `effectiveDpi`                                       |
+| `tile-build` / `level-complete`  | `completedLevels`, `totalLevels`, `completedTiles`, `totalTiles`, `zoom`, `levelTileCount` |
+| `upload` / `artifact-complete`   | `completedArtifacts`, `totalArtifacts`, `path`, `kind`                  |
+| `finalize` / `complete`          | — (terminal marker)                                                     |
+
+### Weighted progress formula
+
+Most UIs want a single 0–1 number rather than raw event fields. A simple weighted scheme that honors the known totals on each event:
+
+```ts
+// Stage weights that sum to 1. Tune per app.
+const WEIGHTS = { rasterize: 0.15, build: 0.5, upload: 0.3, finalize: 0.05 };
+
+function progressFromEvent(e: IngestProgressEvent, cumulative: number): number {
+  switch (e.stage) {
+    case "rasterize":
+      return e.phase === "complete" ? WEIGHTS.rasterize : 0;
+    case "tile-build":
+      return WEIGHTS.rasterize + WEIGHTS.build * (e.completedTiles / e.totalTiles);
+    case "upload":
+      return WEIGHTS.rasterize + WEIGHTS.build
+        + WEIGHTS.upload * (e.completedArtifacts / e.totalArtifacts);
+    case "finalize":
+      return 1;
+  }
+}
+```
+
+### End-to-end example
+
+```ts
+import { ingestPdf, type IngestProgressEvent } from "pdf-mapview/server";
+
+let bar = 0;
+await ingestPdf({
+  input: "./plans/site-plan.pdf",
+  id: "site-plan-001",
+  storage: s3Storage,
+  onProgress: async (event: IngestProgressEvent) => {
+    bar = progressFromEvent(event, bar);
+    // Awaited DB/UI write — the next event won't fire until this resolves.
+    await db.updateIngestProgress({ id: "site-plan-001", progress: bar, event });
+  },
+});
+```
 
 ## CLI
 
