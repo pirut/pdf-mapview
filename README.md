@@ -59,6 +59,29 @@ function Floorplan({ manifest }: { manifest: any }) {
 
 Use `crossOriginPolicy: "Anonymous"` for public CDN or static-hosted assets that send `Access-Control-Allow-Origin`. Use `crossOriginPolicy: "use-credentials"` together with `ajaxWithCredentials: true` only when the remote host requires cookies or credentialed CORS.
 
+### Disabling drag momentum
+
+By default OpenSeadragon applies velocity decay after a quick drag-release so the view "flicks" across the screen. Set `flickEnabled: false` to disable that momentum for mouse, touch, and pen at once:
+
+```tsx
+<TileMapViewer
+  source={{ type: "tiles", manifest }}
+  openSeadragon={{ flickEnabled: false }}
+/>
+```
+
+For finer control you can override individual gesture settings per input device. Explicit `gestureSettingsMouse` / `gestureSettingsTouch` / `gestureSettingsPen` entries win over the `flickEnabled` shortcut:
+
+```tsx
+<TileMapViewer
+  source={{ type: "tiles", manifest }}
+  openSeadragon={{
+    flickEnabled: false,
+    gestureSettingsMouse: { flickEnabled: true }, // keep flick on mouse only
+  }}
+/>
+```
+
 ### Signed tile URLs
 
 Pass `getTileUrl` on the tile source to compute each tile URL at request time — useful for signed S3 URLs, short-lived CDN tokens, or any per-tile authorization:

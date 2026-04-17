@@ -24,6 +24,16 @@ export async function createOpenSeadragonEngine(
   }
   const osd = OpenSeadragon.default;
 
+  const {
+    flickEnabled,
+    gestureSettingsMouse,
+    gestureSettingsTouch,
+    gestureSettingsPen,
+  } = options.openSeadragon ?? {};
+  // Preserve the package's historical default of flick-enabled unless the
+  // consumer explicitly opts out via `flickEnabled: false`.
+  const flick = flickEnabled ?? true;
+
   const viewer = osd({
     element: options.container,
     showNavigationControl: false,
@@ -34,13 +44,21 @@ export async function createOpenSeadragonEngine(
     animationTime: 0.2,
     crossOriginPolicy: options.openSeadragon?.crossOriginPolicy,
     ajaxWithCredentials: options.openSeadragon?.ajaxWithCredentials,
+    // Spread order: hardcoded defaults < flick shortcut < explicit per-input
+    // overrides. This matches the documented precedence in the README.
     gestureSettingsMouse: {
       clickToZoom: false,
       dblClickToZoom: true,
       pinchToZoom: true,
-      flickEnabled: true,
+      flickEnabled: flick,
       scrollToZoom: true,
+      ...gestureSettingsMouse,
     },
+    // OpenSeadragon defaults touch and pen to flick-enabled, so we must mirror
+    // the mouse flick setting here — otherwise a mouse-only fix still fires
+    // momentum on tablets and stylus devices.
+    gestureSettingsTouch: { flickEnabled: flick, ...gestureSettingsTouch },
+    gestureSettingsPen: { flickEnabled: flick, ...gestureSettingsPen },
     tileSources: createTileSource(options.source, options.openSeadragon),
   });
   if (options.signal?.aborted || !options.container.isConnected) {

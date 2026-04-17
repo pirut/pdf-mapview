@@ -134,6 +134,95 @@ describe("createOpenSeadragonEngine", () => {
       ajaxWithCredentials: true,
     });
   });
+
+  it("defaults flickEnabled to true for mouse when no openSeadragon options are provided", async () => {
+    const { createOpenSeadragonEngine } = await import(
+      "../../src/client/engines/openSeadragonEngine"
+    );
+
+    await createOpenSeadragonEngine({
+      container: makeContainer(),
+      source: {
+        type: "image",
+        src: "https://cdn.example.com/floorplan.png",
+        width: 2000,
+        height: 1000,
+      },
+    });
+
+    expect(viewerFactoryCalls).toHaveLength(1);
+    const gestureSettingsMouse = viewerFactoryCalls[0]?.gestureSettingsMouse as
+      | Record<string, unknown>
+      | undefined;
+    expect(gestureSettingsMouse).toMatchObject({
+      clickToZoom: false,
+      dblClickToZoom: true,
+      pinchToZoom: true,
+      scrollToZoom: true,
+      flickEnabled: true,
+    });
+  });
+
+  it("disables flick on mouse, touch, and pen when flickEnabled: false", async () => {
+    const { createOpenSeadragonEngine } = await import(
+      "../../src/client/engines/openSeadragonEngine"
+    );
+
+    await createOpenSeadragonEngine({
+      container: makeContainer(),
+      source: {
+        type: "image",
+        src: "https://cdn.example.com/floorplan.png",
+        width: 2000,
+        height: 1000,
+      },
+      openSeadragon: {
+        flickEnabled: false,
+      },
+    });
+
+    expect(viewerFactoryCalls).toHaveLength(1);
+    expect(viewerFactoryCalls[0]?.gestureSettingsMouse).toMatchObject({
+      flickEnabled: false,
+    });
+    expect(viewerFactoryCalls[0]?.gestureSettingsTouch).toMatchObject({
+      flickEnabled: false,
+    });
+    expect(viewerFactoryCalls[0]?.gestureSettingsPen).toMatchObject({
+      flickEnabled: false,
+    });
+  });
+
+  it("lets explicit per-input overrides win over the flickEnabled shortcut", async () => {
+    const { createOpenSeadragonEngine } = await import(
+      "../../src/client/engines/openSeadragonEngine"
+    );
+
+    await createOpenSeadragonEngine({
+      container: makeContainer(),
+      source: {
+        type: "image",
+        src: "https://cdn.example.com/floorplan.png",
+        width: 2000,
+        height: 1000,
+      },
+      openSeadragon: {
+        flickEnabled: false,
+        gestureSettingsMouse: { flickEnabled: true },
+      },
+    });
+
+    expect(viewerFactoryCalls).toHaveLength(1);
+    expect(viewerFactoryCalls[0]?.gestureSettingsMouse).toMatchObject({
+      flickEnabled: true,
+    });
+    expect(viewerFactoryCalls[0]?.gestureSettingsTouch).toMatchObject({
+      flickEnabled: false,
+    });
+    expect(viewerFactoryCalls[0]?.gestureSettingsPen).toMatchObject({
+      flickEnabled: false,
+    });
+  });
 });
 
 function makeContainer() {
