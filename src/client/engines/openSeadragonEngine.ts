@@ -281,6 +281,13 @@ function createTileSource(
 ) {
   if (source.type === "tiles") {
     const manifest = source.manifest;
+    // OpenSeadragon's default getNumTiles uses
+    // ceil(sourceWidth * scale / tileSize), which disagrees with libvips'
+    // Google-layout output near image dimensions that round oddly across
+    // zoom levels — OSD then asks for an extra column/row that libvips
+    // never wrote, producing 404 noise in logs. The manifest already
+    // records the authoritative per-level grid, so surface it to OSD.
+    const levelsByZ = new Map(manifest.tiles.levels.map((lvl) => [lvl.z, lvl]));
     return {
       width: manifest.source.width,
       height: manifest.source.height,
@@ -289,6 +296,22 @@ function createTileSource(
       maxLevel: manifest.tiles.maxZoom,
       crossOriginPolicy: openSeadragon?.crossOriginPolicy,
       ajaxWithCredentials: openSeadragon?.ajaxWithCredentials,
+      getNumTiles(level: number) {
+        const lvl = levelsByZ.get(level);
+        if (!lvl) {
+          // Fall back to OSD's default calculation for levels the manifest
+          // doesn't cover. Returning undefined lets OSD compute it the old
+          // way rather than crashing on an unexpected level.
+          return undefined;
+        }
+        return { x: lvl.columns, y: lvl.rows };
+      },
+      tileExists(level: number, x: number, y: number) {
+        const lvl = levelsByZ.get(level);
+        // Unknown levels: fall back to OSD's internal bookkeeping.
+        if (!lvl) return true;
+        return x >= 0 && y >= 0 && x < lvl.columns && y < lvl.rows;
+      },
       getTileUrl(level: number, x: number, y: number) {
         if (source.getTileUrl) {
           return source.getTileUrl({

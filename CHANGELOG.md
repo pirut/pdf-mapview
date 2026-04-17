@@ -4,6 +4,27 @@ All notable changes to `pdf-mapview` are documented here. This project
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.4.2 — 2026-04-17
+
+### Fixed
+
+- **404s for edge tiles on non-power-of-two image dimensions.** The
+  OpenSeadragon tile source produced by `createOpenSeadragonEngine`
+  relied on OSD's default `getNumTiles(level)`, which computes the grid
+  as `ceil(sourceWidth * scale / tileSize)`. For image dimensions that
+  round oddly across zoom levels, that formula disagrees with libvips'
+  Google-layout output by one column or row, so OSD would request an
+  edge tile that was never written and the server logs filled with
+  `/tiles/{z}/{x}/{y}.{ext}` 404s. The viewer still rendered (OSD falls
+  back to lower-level tiles), but the log noise was real.
+
+  The tile source now surfaces the authoritative per-level grid already
+  stored in `manifest.tiles.levels[].columns/rows` to OSD via
+  `getNumTiles` and `tileExists`, so OSD never enqueues nor requests
+  out-of-bounds tiles. Consumer-provided `source.getTileUrl` overrides
+  continue to work unchanged. No API change; purely tile-source
+  metadata.
+
 ## 0.4.1 — 2026-04-17
 
 ### Fixed
