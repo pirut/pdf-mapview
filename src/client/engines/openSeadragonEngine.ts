@@ -288,6 +288,21 @@ function createTileSource(
     // never wrote, producing 404 noise in logs. The manifest already
     // records the authoritative per-level grid, so surface it to OSD.
     const levelsByZ = new Map(manifest.tiles.levels.map((lvl) => [lvl.z, lvl]));
+    // Precompute a `"x,y"` lookup set per level. libvips' Google layout
+    // skips tiles that are entirely the background colour, so on PDFs
+    // with large white margins (most floor plans) the `columns × rows`
+    // grid over-promises what was actually uploaded. Manifests produced
+    // by pdf-mapview ≥ 0.4.3 record the generated coordinates per level;
+    // older manifests omit the field and fall back to full-coverage.
+    const generatedTilesByZ = new Map<number, Set<string>>();
+    for (const lvl of manifest.tiles.levels) {
+      if (lvl.generatedTiles) {
+        generatedTilesByZ.set(
+          lvl.z,
+          new Set(lvl.generatedTiles.map(([tx, ty]) => `${tx},${ty}`)),
+        );
+      }
+    }
     return {
       width: manifest.source.width,
       height: manifest.source.height,
@@ -307,10 +322,28 @@ function createTileSource(
         return { x: lvl.columns, y: lvl.rows };
       },
       tileExists(level: number, x: number, y: number) {
+        // Outside the manifest's advertised zoom range: OSD should never
+        // ask, but be defensive to keep 404 noise out of logs if it does.
+        if (level < manifest.tiles.minZoom || level > manifest.tiles.maxZoom) {
+          return false;
+        }
         const lvl = levelsByZ.get(level);
-        // Unknown levels: fall back to OSD's internal bookkeeping.
-        if (!lvl) return true;
-        return x >= 0 && y >= 0 && x < lvl.columns && y < lvl.rows;
+        // An in-range zoom without a corresponding level entry means the
+        // manifest is internally inconsistent — err on the side of "no
+        // tile here" rather than enqueuing a guaranteed-404 request.
+        if (!lvl) return false;
+        // Outside the per-level grid bounds.
+        if (x < 0 || y < 0 || x >= lvl.columns || y >= lvl.rows) {
+          return false;
+        }
+        // In-bounds: consult the per-level emitted-tile index when the
+        // manifest records one. Manifests produced by pdf-mapview ≤ 0.4.2
+        // omit `generatedTiles`, so fall back to assuming full coverage
+        // (historical behaviour, including the 404 noise that motivated
+        // this fix — re-ingest to pick up sparse-aware tileExists).
+        const index = generatedTilesByZ.get(level);
+        if (!index) return true;
+        return index.has(`${x},${y}`);
       },
       getTileUrl(level: number, x: number, y: number) {
         if (source.getTileUrl) {

@@ -4,6 +4,60 @@ All notable changes to `pdf-mapview` are documented here. This project
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.4.3 — 2026-04-17
+
+### Fixed
+
+- **404s for in-bounds-but-blank tiles on PDFs with large white
+  margins.** `sharp().tile({ layout: "google" })` defers to libvips'
+  `--skip-blanks` default, which silently drops every tile whose pixels
+  are within the skip threshold of the background colour. For floor-plan
+  PDFs that's exactly what you want on disk — mostly-white pages would
+  otherwise emit hundreds of near-identical blank tiles — but the
+  manifest's per-level `columns × rows` grid still advertised the full
+  addressable space. The 0.4.2 fix routed `tileExists(z, x, y)` through
+  `columns/rows` bounds, so in-bounds tiles that libvips had actually
+  skipped still reported `true` and OpenSeadragon dutifully requested
+  them, producing a 404 for every blank cell. Real impact: an
+  18000×10800 floor-plan at z=6 with tileSize=512 advertises 792 tiles
+  but only 397 exist — ~50% of viewport tile requests 404'd.
+
+  `buildTilePyramid` now records the actual emitted `(x, y)` coords per
+  level as `manifest.tiles.levels[].generatedTiles` (row-major order for
+  deterministic diffs). `createOpenSeadragonEngine`'s tile source
+  precomputes a lookup set from that list and uses it to answer
+  `tileExists`, so sparse coverage is represented faithfully and OSD
+  stops enqueuing doomed tile requests.
+
+- **Defensive hardening of `tileExists`.** The 0.4.2 fallback returned
+  `true` for unknown levels — fine for OSD's internal bookkeeping, but
+  every such `true` becomes a guaranteed-404 request against storage.
+  The callback now bounds-checks `level` against the manifest's
+  `minZoom/maxZoom`, and returns `false` for unknown in-range levels
+  rather than fabricating coverage the tile layer doesn't have. In
+  practice this is unreachable with manifests produced by `ingestPdf` /
+  `ingestImage` (every level from `minZoom..maxZoom` is always present),
+  but hand-rolled or truncated manifests no longer leak 404 noise.
+
+### Added
+
+- `TileLevelManifest.generatedTiles?: Array<[number, number]>` — the
+  list of `(x, y)` tile coords actually emitted for each zoom level.
+  Optional for backwards compatibility: manifests produced by
+  `pdf-mapview` ≤ 0.4.2 omit the field, and consumers of those older
+  manifests continue to assume full coverage (identical behaviour to
+  the 0.4.2 `tileExists`). Ingesting a PDF with `pdf-mapview` ≥ 0.4.3
+  always populates this field.
+
+### Upgrade notes
+
+- **Re-ingest existing plan sheets to silence the 404s.** The
+  `generatedTiles` field is only populated by fresh ingests, so
+  manifests on disk from 0.4.2 or earlier continue to exhibit the
+  original log noise until you re-run the pipeline. The client-side
+  `tileExists` change is backwards-safe — old manifests load and
+  render identically to before.
+
 ## 0.4.2 — 2026-04-17
 
 ### Fixed

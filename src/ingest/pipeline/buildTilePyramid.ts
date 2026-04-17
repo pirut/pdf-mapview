@@ -32,7 +32,7 @@ export async function buildTilePyramid(
     options.image.byteOffset,
     options.image.byteLength,
   );
-  const levels = buildTileLevels(options.width, options.height, options.tileSize);
+  const gridLevels = buildTileLevels(options.width, options.height, options.tileSize);
   const tempDir = await fs.mkdtemp(join(tmpdir(), "pdf-map-tiles-"));
   const tileOutputPath = join(tempDir, "tiles.dz");
   const tileRootDir = join(tempDir, basename(tileOutputPath, ".dz"));
@@ -73,6 +73,15 @@ export async function buildTilePyramid(
       }),
     ]);
 
+    // libvips' `layout: "google"` skips tiles that are entirely the
+    // background colour — a big win on floor-plan PDFs, which are mostly
+    // white margin. The manifest grid (`columns × rows`) still reflects
+    // the full addressable space, but we also record the set of coords
+    // that were actually emitted so the OpenSeadragon tile source can
+    // answer `tileExists` accurately and stop requesting blank tiles
+    // that 404 at the storage layer.
+    const levels = annotateLevelsWithGeneratedTiles(gridLevels, tiles);
+
     return {
       levels,
       tiles,
@@ -83,6 +92,33 @@ export async function buildTilePyramid(
     await cleanup();
     throw error;
   }
+}
+
+function annotateLevelsWithGeneratedTiles(
+  levels: TileLevelManifest[],
+  tiles: GeneratedTileFile[],
+): TileLevelManifest[] {
+  const coordsByZoom = new Map<number, Array<[number, number]>>();
+  for (const tile of tiles) {
+    let coords = coordsByZoom.get(tile.z);
+    if (!coords) {
+      coords = [];
+      coordsByZoom.set(tile.z, coords);
+    }
+    coords.push([tile.x, tile.y]);
+  }
+
+  // Row-major sort (y before x) keeps the serialized manifest
+  // deterministic across re-ingests and mirrors the on-disk tile walk
+  // order, making the list easy to skim in a diff.
+  for (const coords of coordsByZoom.values()) {
+    coords.sort((left, right) => left[1] - right[1] || left[0] - right[0]);
+  }
+
+  return levels.map((level) => ({
+    ...level,
+    generatedTiles: coordsByZoom.get(level.z) ?? [],
+  }));
 }
 
 function buildTileLevels(width: number, height: number, tileSize: number): TileLevelManifest[] {

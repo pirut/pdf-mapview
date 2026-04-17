@@ -291,17 +291,163 @@ describe("createOpenSeadragonEngine", () => {
     expect(tileSources!.getNumTiles(2)).toBeUndefined();
 
     // In-bounds tiles exist; edge tiles past the advertised grid do not.
+    // (This manifest omits `generatedTiles`, so in-bounds defaults to full
+    // coverage — exercised explicitly by the backward-compat test below.)
     expect(tileSources!.tileExists(4, 0, 0)).toBe(true);
     expect(tileSources!.tileExists(4, 15, 5)).toBe(true);
     expect(tileSources!.tileExists(4, 16, 0)).toBe(false);
     expect(tileSources!.tileExists(4, 0, 6)).toBe(false);
     expect(tileSources!.tileExists(4, -1, 0)).toBe(false);
     expect(tileSources!.tileExists(4, 0, -1)).toBe(false);
-    // Unknown levels: be permissive so OSD's internal behavior is preserved.
-    expect(tileSources!.tileExists(2, 0, 0)).toBe(true);
+    // Zoom outside [minZoom, maxZoom]: reject, don't enqueue a 404.
+    expect(tileSources!.tileExists(-1, 0, 0)).toBe(false);
+    expect(tileSources!.tileExists(5, 0, 0)).toBe(false);
+    // Unknown in-range level (manifest internally inconsistent): also
+    // reject rather than fall back to OSD's default — the old permissive
+    // behaviour just produced guaranteed-404 tile requests.
+    expect(tileSources!.tileExists(2, 0, 0)).toBe(false);
 
     // Sanity: the original getTileUrl resolution still works.
     expect(tileSources!.getTileUrl(4, 3, 2)).toBe("tiles/4/3/2.webp");
+  });
+
+  it("consults generatedTiles so in-bounds blank tiles report false", async () => {
+    const { createOpenSeadragonEngine } = await import(
+      "../../src/client/engines/openSeadragonEngine"
+    );
+
+    await createOpenSeadragonEngine({
+      container: makeContainer(),
+      source: {
+        type: "tiles",
+        manifest: {
+          id: "sparse-coverage",
+          version: 1,
+          kind: "pdf-map",
+          source: {
+            type: "pdf",
+            page: 1,
+            width: 18000,
+            height: 10800,
+          },
+          coordinateSpace: {
+            normalized: true,
+            width: 18000,
+            height: 10800,
+          },
+          tiles: {
+            tileSize: 512,
+            format: "webp",
+            minZoom: 0,
+            maxZoom: 6,
+            pathTemplate: "tiles/{z}/{x}/{y}.webp",
+            // Mimics a floor-plan PDF at z=6 where libvips emitted only
+            // (1,0), (1,1), (2,1) — everything else in the 3×2 corner
+            // of the grid is white margin and was skipped on disk.
+            levels: [
+              {
+                z: 6,
+                width: 18000,
+                height: 10800,
+                columns: 3,
+                rows: 2,
+                scale: 1,
+                generatedTiles: [
+                  [1, 0],
+                  [1, 1],
+                  [2, 1],
+                ],
+              },
+            ],
+          },
+          view: {
+            defaultCenter: [0.5, 0.5],
+            defaultZoom: 1,
+            minZoom: 0,
+            maxZoom: 6,
+          },
+        },
+      },
+    });
+
+    const tileSources = viewerFactoryCalls[0]?.tileSources as
+      | {
+          tileExists: (level: number, x: number, y: number) => boolean;
+        }
+      | undefined;
+
+    // Emitted tiles: true.
+    expect(tileSources!.tileExists(6, 1, 0)).toBe(true);
+    expect(tileSources!.tileExists(6, 1, 1)).toBe(true);
+    expect(tileSources!.tileExists(6, 2, 1)).toBe(true);
+    // In-bounds-but-blank tiles (skipped by libvips): false. Without the
+    // generatedTiles check, these produced 404s in storage logs for every
+    // viewer that panned into a white margin.
+    expect(tileSources!.tileExists(6, 0, 0)).toBe(false);
+    expect(tileSources!.tileExists(6, 0, 1)).toBe(false);
+    expect(tileSources!.tileExists(6, 2, 0)).toBe(false);
+    // Out-of-grid still rejected.
+    expect(tileSources!.tileExists(6, 3, 0)).toBe(false);
+    expect(tileSources!.tileExists(6, 0, 2)).toBe(false);
+  });
+
+  it("assumes full coverage when generatedTiles is absent (back-compat)", async () => {
+    const { createOpenSeadragonEngine } = await import(
+      "../../src/client/engines/openSeadragonEngine"
+    );
+
+    await createOpenSeadragonEngine({
+      container: makeContainer(),
+      source: {
+        type: "tiles",
+        manifest: {
+          id: "legacy-manifest",
+          version: 1,
+          kind: "pdf-map",
+          source: {
+            type: "image",
+            width: 1024,
+            height: 512,
+          },
+          coordinateSpace: {
+            normalized: true,
+            width: 1024,
+            height: 512,
+          },
+          tiles: {
+            tileSize: 256,
+            format: "webp",
+            minZoom: 0,
+            maxZoom: 2,
+            pathTemplate: "tiles/{z}/{x}/{y}.webp",
+            // Produced by pdf-mapview ≤ 0.4.2 — no `generatedTiles` field.
+            levels: [{ z: 2, width: 1024, height: 512, columns: 4, rows: 2, scale: 1 }],
+          },
+          view: {
+            defaultCenter: [0.5, 0.5],
+            defaultZoom: 1,
+            minZoom: 0,
+            maxZoom: 2,
+          },
+        },
+      },
+    });
+
+    const tileSources = viewerFactoryCalls[0]?.tileSources as
+      | {
+          tileExists: (level: number, x: number, y: number) => boolean;
+        }
+      | undefined;
+
+    // Every in-bounds coord is presumed present: identical to pre-0.4.3
+    // behaviour so no consumer regresses just by upgrading the library.
+    for (let y = 0; y < 2; y += 1) {
+      for (let x = 0; x < 4; x += 1) {
+        expect(tileSources!.tileExists(2, x, y)).toBe(true);
+      }
+    }
+    expect(tileSources!.tileExists(2, 4, 0)).toBe(false);
+    expect(tileSources!.tileExists(2, 0, 2)).toBe(false);
   });
 
   it("routes tileExists/getNumTiles through a consumer-provided getTileUrl override", async () => {
