@@ -126,7 +126,10 @@ async function collectGeneratedTiles(
     contentType,
   }));
 
-  tiles.sort((left, right) => left.z - right.z || left.x - right.x || left.y - right.y);
+  // Walk row-major within each zoom level so upload progress events fire in
+  // a predictable, monotonic order regardless of how the filesystem happened
+  // to enumerate libvips' `{z}/{y}/{x}.ext` tree.
+  tiles.sort((left, right) => left.z - right.z || left.y - right.y || left.x - right.x);
 
   return tiles;
 }
@@ -168,12 +171,17 @@ async function collectTileFilePaths(tileRootDir: string): Promise<
         throw new Error(`Unexpected generated tile path: ${relativePath}`);
       }
 
+      // libvips' `layout: "google"` writes `{z}/{y}/{x}.ext` (row before
+      // column — the Google Maps convention), so the second path segment is
+      // the row (y) and the third is the column (x). OpenSeadragon and our
+      // uploaded key format (`tiles/{z}/{x}/{y}.ext`) both use x=column,
+      // y=row, so we label these correctly here at the parse boundary.
       const stats = await fs.stat(filePath);
       tiles.push({
         filePath,
         z: Number(match[1]),
-        x: Number(match[2]),
-        y: Number(match[3]),
+        y: Number(match[2]),
+        x: Number(match[3]),
         size: stats.size,
       });
     }
