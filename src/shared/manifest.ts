@@ -11,6 +11,23 @@ export interface TileLevelManifest {
   columns: number;
   rows: number;
   scale: number;
+  /**
+   * Tiles actually emitted for this level, as `[x, y]` pairs in row-major
+   * order. libvips' `layout: "google"` skips tiles that are entirely the
+   * background color (typically white margin on floor-plan PDFs), so
+   * `generatedTiles.length` is often strictly less than `columns * rows`.
+   *
+   * Consumers (e.g., the OpenSeadragon tile source) should use this list
+   * to answer `tileExists(z, x, y)` accurately, rather than assuming a
+   * fully-populated `columns × rows` grid.
+   *
+   * **Backwards compatibility**: when the field is absent — i.e. the
+   * manifest was produced by `pdf-mapview` ≤ 0.4.2, which did not record
+   * per-tile coverage — consumers should fall back to assuming full
+   * coverage so older manifests continue to load (with 404 noise for
+   * skipped tiles, as before).
+   */
+  generatedTiles?: Array<[number, number]>;
 }
 
 export interface PdfRasterizationManifest {
@@ -77,6 +94,11 @@ export interface ResolveTileUrlArgs {
   overrideTemplate?: string;
 }
 
+const tileCoordinateSchema = z.tuple([
+  z.number().int().min(0),
+  z.number().int().min(0),
+]);
+
 const tileLevelSchema = z.object({
   z: z.number().int().min(0),
   width: z.number().int().positive(),
@@ -84,6 +106,7 @@ const tileLevelSchema = z.object({
   columns: z.number().int().positive(),
   rows: z.number().int().positive(),
   scale: z.number().positive(),
+  generatedTiles: z.array(tileCoordinateSchema).optional(),
 });
 
 const pdfRasterizationSchema = z
