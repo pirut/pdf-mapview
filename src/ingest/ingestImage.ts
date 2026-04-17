@@ -18,6 +18,10 @@ import { normalizeImage } from "./pipeline/normalizeImage";
 import { buildTilePyramid } from "./pipeline/buildTilePyramid";
 import { buildManifest } from "./pipeline/manifestBuilder";
 import { writeArtifacts } from "./pipeline/writeArtifacts";
+import {
+  createProgressReporter,
+  type ProgressReporter,
+} from "./pipeline/progressReporter";
 
 export async function ingestImage(options: IngestImageOptions): Promise<IngestResult> {
   const inspected = await inspectInput(options.input);
@@ -49,6 +53,12 @@ export async function ingestRasterizedImage(
     mimeType?: string;
     page?: number;
     rasterization?: PdfRasterizationManifest;
+    /**
+     * Pre-built reporter shared with earlier stages (PDF path). When omitted,
+     * a fresh reporter is created from `common.onProgress` so direct callers
+     * of `ingestImage` get progress out of the box.
+     */
+    report?: ProgressReporter;
   },
 ): Promise<IngestResult> {
   const tileSize = input.common.tileSize ?? 256;
@@ -56,6 +66,7 @@ export async function ingestRasterizedImage(
   const tileQuality = input.common.tileQuality ?? 92;
   const storage = input.common.storage ?? memoryStorageAdapter();
   const retainFilesInResult = input.common.retainFilesInResult !== false;
+  const report = input.report ?? createProgressReporter(input.common.onProgress);
 
   const pyramid = await buildTilePyramid({
     image: normalized.bytes,
@@ -66,53 +77,85 @@ export async function ingestRasterizedImage(
     quality: tileQuality,
   });
 
-  const overlayPayload = await resolveOverlayPayload(input.common.overlays);
-
-  const manifest = buildManifest({
-    id: input.id,
-    title: input.title,
-    sourceType: input.sourceType,
-    originalFilename: input.originalFilename,
-    page: input.page,
-    width: normalized.width,
-    height: normalized.height,
-    mimeType: input.mimeType ?? normalized.mimeType,
-    rasterization: input.rasterization,
-    tileSize,
-    tileFormat,
-    levels: pyramid.levels,
-    baseUrl: input.common.baseUrl,
-    inlineOverlays: overlayPayload.inline,
-    overlayUrl: overlayPayload.url,
-    previewPath: pyramid.preview.path,
-  });
-
-  const filesToWrite: PersistableArtifact[] = [...pyramid.tiles, pyramid.preview];
-
-  if (overlayPayload.file) {
-    filesToWrite.push(overlayPayload.file);
-  }
-
-  filesToWrite.push({
-    kind: "manifest",
-    path: "manifest.json",
-    contentType: "application/json",
-    bytes: new TextEncoder().encode(JSON.stringify(manifest, null, 2)),
-  });
-
   try {
+    // Tile-build events. `sharp.tile()` produces the entire pyramid in a
+    // single call (no per-level callbacks), so we synthesize one
+    // `level-complete` event per zoom level once the pyramid is ready. Totals
+    // are populated on the very first event and counters are monotonic.
+    const tilesByZoom = new Map<number, number>();
+    for (const tile of pyramid.tiles) {
+      tilesByZoom.set(tile.z, (tilesByZoom.get(tile.z) ?? 0) + 1);
+    }
+
+    const totalLevels = pyramid.levels.length;
+    const totalTiles = pyramid.tiles.length;
+    let completedTiles = 0;
+    for (let i = 0; i < pyramid.levels.length; i++) {
+      const level = pyramid.levels[i];
+      const levelTileCount = tilesByZoom.get(level.z) ?? 0;
+      completedTiles += levelTileCount;
+      await report({
+        stage: "tile-build",
+        phase: "level-complete",
+        completedLevels: i + 1,
+        totalLevels,
+        completedTiles,
+        totalTiles,
+        zoom: level.z,
+        levelTileCount,
+      });
+    }
+
+    const overlayPayload = await resolveOverlayPayload(input.common.overlays);
+
+    const manifest = buildManifest({
+      id: input.id,
+      title: input.title,
+      sourceType: input.sourceType,
+      originalFilename: input.originalFilename,
+      page: input.page,
+      width: normalized.width,
+      height: normalized.height,
+      mimeType: input.mimeType ?? normalized.mimeType,
+      rasterization: input.rasterization,
+      tileSize,
+      tileFormat,
+      levels: pyramid.levels,
+      baseUrl: input.common.baseUrl,
+      inlineOverlays: overlayPayload.inline,
+      overlayUrl: overlayPayload.url,
+      previewPath: pyramid.preview.path,
+    });
+
+    const filesToWrite: PersistableArtifact[] = [...pyramid.tiles, pyramid.preview];
+
+    if (overlayPayload.file) {
+      filesToWrite.push(overlayPayload.file);
+    }
+
+    filesToWrite.push({
+      kind: "manifest",
+      path: "manifest.json",
+      contentType: "application/json",
+      bytes: new TextEncoder().encode(JSON.stringify(manifest, null, 2)),
+    });
+
     const { uploaded, storage: storageResult } = await writeArtifacts(
       storage,
       manifest,
       filesToWrite,
       {
         writeConcurrency: input.common.writeConcurrency,
+        report,
+        totalArtifacts: filesToWrite.length,
       },
     );
 
     const files = retainFilesInResult
       ? await materializeArtifacts(filesToWrite, input.common.writeConcurrency)
       : [];
+
+    await report({ stage: "finalize", phase: "complete" });
 
     return {
       manifest,

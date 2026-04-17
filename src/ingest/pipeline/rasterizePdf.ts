@@ -22,6 +22,19 @@ export interface RasterizePdfOptions {
   maxDimension: number;
   rasterDpi?: number;
   background: string;
+  /**
+   * Optional hook fired after the PDF is loaded and the render scale has been
+   * resolved, but before the page is rasterized. The effective DPI is not
+   * knowable until this point, so progress-style "rasterize start" events must
+   * be emitted from here rather than from the caller.
+   *
+   * Awaited — any thrown/rejected value propagates and aborts rasterization.
+   */
+  onBeforeRender?: (info: {
+    effectiveDpi: number;
+    requestedDpi?: number;
+    maxDimension?: number;
+  }) => void | Promise<void>;
 }
 
 interface PdfJsModule {
@@ -49,6 +62,19 @@ export async function rasterizePdf(options: RasterizePdfOptions): Promise<Raster
   const scaledViewport = page.getViewport({
     scale: scale <= 0 ? 1 : scale,
   });
+
+  const hasRequestedDpi =
+    options.rasterDpi !== undefined &&
+    Number.isFinite(options.rasterDpi) &&
+    options.rasterDpi > 0;
+
+  if (options.onBeforeRender) {
+    await options.onBeforeRender({
+      effectiveDpi: scale * 72,
+      requestedDpi: hasRequestedDpi ? options.rasterDpi : undefined,
+      maxDimension: hasRequestedDpi ? undefined : options.maxDimension,
+    });
+  }
 
   const canvas = createCanvas(Math.ceil(scaledViewport.width), Math.ceil(scaledViewport.height));
   const context = canvas.getContext("2d");
