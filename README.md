@@ -239,6 +239,162 @@ const result = await ingestPdf({
 });
 ```
 
+### Convex storage
+
+`convexStorageAdapter` persists each tile, preview, overlay, and manifest into Convex file storage and records a row per artifact in a user-owned `mapAssets` table. URLs are resolved at request time by the viewer via the `getTileUrl` hook — **do not set `baseUrl` on the `TilesSource`**, since Convex URLs are signed and time-limited.
+
+The adapter stays decoupled from specific Convex function names (same philosophy as the S3-compatible adapter). You provide a `storeArtifact` callback that talks to your own Convex deployment.
+
+**Convex schema (`convex/schema.ts`):**
+
+```ts
+import { defineSchema, defineTable } from "convex/server";
+import { v } from "convex/values";
+
+export default defineSchema({
+  mapAssets: defineTable({
+    mapId: v.string(),
+    relativePath: v.string(),
+    storageId: v.id("_storage"),
+    kind: v.union(
+      v.literal("tile"),
+      v.literal("manifest"),
+      v.literal("preview"),
+      v.literal("overlay"),
+    ),
+    contentType: v.string(),
+    size: v.number(),
+  }).index("by_map_and_path", ["mapId", "relativePath"]),
+});
+```
+
+**Mutations and query (`convex/maps.ts`):**
+
+```ts
+import { mutation, query } from "./_generated/server";
+import { v } from "convex/values";
+
+export const generateUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => await ctx.storage.generateUploadUrl(),
+});
+
+export const recordMapArtifact = mutation({
+  args: {
+    mapId: v.string(),
+    relativePath: v.string(),
+    storageId: v.id("_storage"),
+    kind: v.union(
+      v.literal("tile"),
+      v.literal("manifest"),
+      v.literal("preview"),
+      v.literal("overlay"),
+    ),
+    contentType: v.string(),
+    size: v.number(),
+  },
+  handler: async (ctx, args) => {
+    // Insert-only to minimize OCC contention during concurrent ingest.
+    // Add upsert logic (query by_map_and_path, delete old storageId, then insert)
+    // if you need to re-ingest a map idempotently.
+    await ctx.db.insert("mapAssets", args);
+  },
+});
+
+export const getTileUrl = query({
+  args: { mapId: v.string(), relativePath: v.string() },
+  handler: async (ctx, { mapId, relativePath }) => {
+    const row = await ctx.db
+      .query("mapAssets")
+      .withIndex("by_map_and_path", (q) =>
+        q.eq("mapId", mapId).eq("relativePath", relativePath),
+      )
+      .unique();
+    return row ? await ctx.storage.getUrl(row.storageId) : null;
+  },
+});
+```
+
+**Ingest caller (Node — CLI, TanStack Start server function, or Next.js route handler):**
+
+```ts
+import { ConvexHttpClient } from "convex/browser";
+import { api } from "../convex/_generated/api";
+import { ingestPdf, convexStorageAdapter } from "pdf-mapview/ingest";
+
+const convex = new ConvexHttpClient(process.env.CONVEX_URL!);
+
+const storage = convexStorageAdapter({
+  mapId: "site-plan-001",
+  async storeArtifact({ relativePath, bytes, contentType, kind, size, mapId }) {
+    const uploadUrl = await convex.mutation(api.maps.generateUploadUrl, {});
+    const res = await fetch(uploadUrl, {
+      method: "POST",
+      headers: { "Content-Type": contentType },
+      body: bytes,
+    });
+    const { storageId } = (await res.json()) as { storageId: string };
+
+    await convex.mutation(api.maps.recordMapArtifact, {
+      mapId,
+      relativePath,
+      storageId,
+      contentType,
+      kind,
+      size,
+    });
+
+    return { storageId };
+  },
+});
+
+await ingestPdf({
+  input: "./plans/site-plan.pdf",
+  id: "site-plan-001",      // keep in sync with convexStorageAdapter.mapId
+  storage,
+  writeConcurrency: 4,       // lower than the S3 default to respect Convex mutation throughput
+  retainFilesInResult: false,
+});
+```
+
+**Viewer wiring:**
+
+```tsx
+import { TileMapViewer } from "pdf-mapview/client";
+import { useConvex } from "convex/react";
+import { api } from "../convex/_generated/api";
+
+function Floorplan({ manifest }: { manifest: any }) {
+  const convex = useConvex();
+  return (
+    <TileMapViewer
+      source={{
+        type: "tiles",
+        manifest,
+        // Deliberately no baseUrl — Convex URLs are per-tile signed.
+        async getTileUrl({ z, x, y, manifest, signal }) {
+          const ext = manifest.tiles.format === "jpeg" ? "jpg" : manifest.tiles.format;
+          const url = await convex.query(api.maps.getTileUrl, {
+            mapId: manifest.id,
+            relativePath: `tiles/${z}/${x}/${y}.${ext}`,
+          });
+          if (!url) throw new Error(`tile not found: ${z}/${x}/${y}`);
+          return url;
+        },
+      }}
+    />
+  );
+}
+```
+
+**Notes and caveats:**
+
+- `convexStorageAdapter.mapId` and the `id` you pass to `ingestPdf` / `ingestImage` identify the same map — keep them in sync.
+- `TilesSource.baseUrl` should **not** be set — signed Convex URLs are only valid via `getTileUrl`.
+- Ingest runs in Node because `sharp` and `@napi-rs/canvas` are native modules — it cannot execute inside a Convex action runtime.
+- The `recordMapArtifact` example above is insert-only; add upsert logic (query the existing row, delete its old `storageId` via `ctx.storage.delete`, then insert) if you need to re-ingest a map idempotently.
+- If you see OCC mutation conflicts under load, lower `writeConcurrency` (e.g. `4`). All `recordMapArtifact` calls touch the same table partitioned by `mapId`, so mutation throughput per map is bounded by Convex OCC retries.
+
 ## Performance tuning
 
 Ingest runs in streaming mode — tiles and previews live on disk until storage adapters copy them into place. A few knobs let you trade memory, CPU, and latency for your target hardware.
