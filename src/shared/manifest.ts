@@ -63,12 +63,7 @@ export interface PdfMapManifest {
     pathTemplate: string;
     levels: TileLevelManifest[];
   };
-  view: {
-    defaultCenter: [number, number];
-    defaultZoom: number;
-    minZoom: number;
-    maxZoom: number;
-  };
+  view: PdfMapView;
   overlays?: {
     inline?: RegionCollection;
     url?: string;
@@ -83,7 +78,16 @@ export interface PdfMapManifest {
   };
 }
 
-export interface CreateManifestInput extends Omit<PdfMapManifest, "version" | "kind"> {}
+export interface PdfMapView {
+  defaultCenter: [number, number];
+  defaultZoom: number;
+  minZoom: number;
+  maxZoom: number;
+}
+
+export interface CreateManifestInput extends Omit<PdfMapManifest, "version" | "kind" | "view"> {
+  view?: PdfMapView;
+}
 
 export interface ResolveTileUrlArgs {
   manifest: PdfMapManifest;
@@ -118,7 +122,17 @@ const pdfRasterizationSchema = z
   })
   .optional();
 
-export const manifestSchema: z.ZodType<PdfMapManifest> = z.object({
+const manifestViewSchema = z.object({
+  defaultCenter: z.tuple([
+    z.number().finite().min(0).max(1),
+    z.number().finite().min(0).max(1),
+  ]),
+  defaultZoom: z.number().finite(),
+  minZoom: z.number().finite(),
+  maxZoom: z.number().finite(),
+});
+
+const rawManifestSchema = z.object({
   version: z.literal(1),
   kind: z.literal("pdf-map"),
   id: z.string().min(1),
@@ -144,15 +158,7 @@ export const manifestSchema: z.ZodType<PdfMapManifest> = z.object({
     pathTemplate: z.string().min(1),
     levels: z.array(tileLevelSchema),
   }),
-  view: z.object({
-    defaultCenter: z.tuple([
-      z.number().finite().min(0).max(1),
-      z.number().finite().min(0).max(1),
-    ]),
-    defaultZoom: z.number().finite(),
-    minZoom: z.number().finite(),
-    maxZoom: z.number().finite(),
-  }),
+  view: manifestViewSchema.optional(),
   overlays: z
     .object({
       inline: regionCollectionSchema.optional(),
@@ -173,6 +179,13 @@ export const manifestSchema: z.ZodType<PdfMapManifest> = z.object({
     .optional(),
 });
 
+export const manifestSchema: z.ZodType<PdfMapManifest, z.ZodTypeDef, unknown> = rawManifestSchema.transform(
+  (manifest) => ({
+    ...manifest,
+    view: resolveManifestView(manifest),
+  }),
+);
+
 export function createManifest(input: CreateManifestInput): PdfMapManifest {
   return manifestSchema.parse({
     version: 1,
@@ -183,6 +196,17 @@ export function createManifest(input: CreateManifestInput): PdfMapManifest {
 
 export function parseManifest(input: unknown): PdfMapManifest {
   return manifestSchema.parse(input);
+}
+
+export function resolveManifestView(
+  manifest: Pick<PdfMapManifest, "tiles"> & { view?: PdfMapView },
+): PdfMapView {
+  return {
+    minZoom: manifest.view?.minZoom ?? manifest.tiles.minZoom,
+    maxZoom: manifest.view?.maxZoom ?? manifest.tiles.maxZoom,
+    defaultZoom: manifest.view?.defaultZoom ?? manifest.tiles.minZoom,
+    defaultCenter: manifest.view?.defaultCenter ?? [0.5, 0.5],
+  };
 }
 
 export function resolveTileUrl(args: ResolveTileUrlArgs): string {

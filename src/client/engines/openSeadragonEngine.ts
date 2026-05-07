@@ -1,5 +1,5 @@
 import { clamp01 } from "../../shared/coordinates";
-import { resolveTileUrl } from "../../shared/manifest";
+import { resolveManifestView, resolveTileUrl } from "../../shared/manifest";
 import type { OpenSeadragonLoadOptions } from "../../shared/source";
 import type { NormalizedPoint } from "../../shared/coordinates";
 import type { MapViewState, ScreenPoint, ViewTransitionOptions } from "../../shared/viewport";
@@ -252,7 +252,8 @@ function getDefaultView(
   options: EngineInitOptions,
   dimensions: { width: number; height: number },
 ): MapViewState {
-  const manifestView = options.source.type === "tiles" ? options.source.manifest.view : undefined;
+  const manifestView =
+    options.source.type === "tiles" ? resolveManifestView(options.source.manifest) : undefined;
 
   return {
     center: options.initialView?.center ?? normalizedCenterFromSource(options.source),
@@ -266,9 +267,10 @@ function getDefaultView(
 
 function normalizedCenterFromSource(source: EngineInitOptions["source"]) {
   if (source.type === "tiles") {
+    const manifestView = resolveManifestView(source.manifest);
     return {
-      x: source.manifest.view.defaultCenter[0],
-      y: source.manifest.view.defaultCenter[1],
+      x: manifestView.defaultCenter[0],
+      y: manifestView.defaultCenter[1],
     };
   }
 

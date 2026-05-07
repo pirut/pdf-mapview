@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { createManifest, parseManifest, resolveTileUrl } from "../../src/shared/manifest";
+import {
+  createManifest,
+  parseManifest,
+  resolveManifestView,
+  resolveTileUrl,
+} from "../../src/shared/manifest";
 
 describe("manifest helpers", () => {
   it("creates and parses a manifest", () => {
@@ -77,6 +82,63 @@ describe("manifest helpers", () => {
     });
 
     expect(parseManifest(manifest)).toEqual(manifest);
+  });
+
+  it("synthesizes view defaults for legacy manifests without a view block", () => {
+    const manifest = parseManifest({
+      id: "legacy-plan",
+      version: 1,
+      kind: "pdf-map",
+      source: {
+        type: "pdf",
+        page: 1,
+        width: 2000,
+        height: 1000,
+      },
+      coordinateSpace: {
+        normalized: true,
+        width: 2000,
+        height: 1000,
+      },
+      tiles: {
+        tileSize: 256,
+        format: "webp",
+        minZoom: 0,
+        maxZoom: 3,
+        pathTemplate: "tiles/{z}/{x}/{y}.webp",
+        levels: [
+          { z: 0, width: 250, height: 125, columns: 1, rows: 1, scale: 0.125 },
+          { z: 3, width: 2000, height: 1000, columns: 8, rows: 4, scale: 1 },
+        ],
+      },
+    });
+
+    expect(manifest.view).toEqual({
+      defaultCenter: [0.5, 0.5],
+      defaultZoom: 0,
+      minZoom: 0,
+      maxZoom: 3,
+    });
+  });
+
+  it("resolves view defaults from tiles for raw legacy manifest objects", () => {
+    expect(
+      resolveManifestView({
+        tiles: {
+          tileSize: 256,
+          format: "webp",
+          minZoom: 2,
+          maxZoom: 5,
+          pathTemplate: "tiles/{z}/{x}/{y}.webp",
+          levels: [],
+        },
+      }),
+    ).toEqual({
+      defaultCenter: [0.5, 0.5],
+      defaultZoom: 2,
+      minZoom: 2,
+      maxZoom: 5,
+    });
   });
 
   it("round-trips the per-level generatedTiles coverage list", () => {

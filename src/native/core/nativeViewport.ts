@@ -1,6 +1,7 @@
 import type { NormalizedPoint, NormalizedRect } from "../../shared/coordinates";
 import { clamp01 } from "../../shared/coordinates";
 import type { PdfMapManifest } from "../../shared/manifest";
+import { resolveManifestView } from "../../shared/manifest";
 import type { MapViewState, ScreenPoint, ViewTransitionOptions } from "../../shared/viewport";
 
 export interface NativeViewportSize {
@@ -26,7 +27,7 @@ export interface ResolveNativeViewOptions {
 }
 
 export function resolveNativeInitialView(options: ResolveNativeViewOptions): MapViewState {
-  const manifestView = options.manifest.view;
+  const manifestView = resolveManifestView(options.manifest);
   const minZoom = options.minZoom ?? manifestView.minZoom;
   const maxZoom = options.maxZoom ?? manifestView.maxZoom;
   const zoom = clampZoom(options.initialView?.zoom ?? manifestView.defaultZoom, minZoom, maxZoom);
@@ -136,13 +137,14 @@ export function fitNativeBounds(
   _options?: ViewTransitionOptions,
 ): MapViewState {
   if (!bounds) {
+    const manifestView = resolveManifestView(manifest);
     return clampNativeView(manifest, {
       ...view,
       center: {
-        x: manifest.view.defaultCenter[0],
-        y: manifest.view.defaultCenter[1],
+        x: manifestView.defaultCenter[0],
+        y: manifestView.defaultCenter[1],
       },
-      zoom: clampZoom(manifest.view.defaultZoom, view.minZoom, view.maxZoom),
+      zoom: clampZoom(manifestView.defaultZoom, view.minZoom, view.maxZoom),
     });
   }
 

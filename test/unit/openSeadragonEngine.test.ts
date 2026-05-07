@@ -101,6 +101,45 @@ describe("createOpenSeadragonEngine", () => {
     });
   });
 
+  it("opens legacy tile manifests without a view block", async () => {
+    const { createOpenSeadragonEngine } = await import(
+      "../../src/client/engines/openSeadragonEngine"
+    );
+
+    await expect(
+      createOpenSeadragonEngine({
+        container: makeContainer(),
+        source: {
+          type: "tiles",
+          manifest: {
+            id: "legacy-plan",
+            version: 1,
+            kind: "pdf-map",
+            source: {
+              type: "pdf",
+              page: 1,
+              width: 2000,
+              height: 1000,
+            },
+            coordinateSpace: {
+              normalized: true,
+              width: 2000,
+              height: 1000,
+            },
+            tiles: {
+              tileSize: 256,
+              format: "webp",
+              minZoom: 0,
+              maxZoom: 3,
+              pathTemplate: "tiles/{z}/{x}/{y}.webp",
+              levels: [{ z: 0, width: 2000, height: 1000, columns: 8, rows: 4, scale: 1 }],
+            },
+          },
+        } as any,
+      }),
+    ).resolves.toBeTruthy();
+  });
+
   it("passes viewer-level CORS options into OpenSeadragon image tile sources", async () => {
     const { createOpenSeadragonEngine } = await import(
       "../../src/client/engines/openSeadragonEngine"

@@ -61,6 +61,29 @@ describe("native viewport helpers", () => {
     expect(next.center).toEqual({ x: 0.375, y: 0.375 });
     expect(next.zoom).toBeGreaterThan(view.zoom);
   });
+
+  it("supports raw legacy manifests without a view block", () => {
+    const legacyManifest = {
+      ...manifest,
+      view: undefined,
+    };
+    const view = resolveNativeInitialView({
+      manifest: legacyManifest as unknown as typeof manifest,
+      container: { width: 500, height: 500 },
+    });
+
+    expect(view).toMatchObject({
+      center: { x: 0.5, y: 0.5 },
+      zoom: 0,
+      minZoom: 0,
+      maxZoom: 2,
+    });
+
+    expect(fitNativeBounds(legacyManifest as unknown as typeof manifest, view)).toMatchObject({
+      center: { x: 0.5, y: 0.5 },
+      zoom: 0,
+    });
+  });
 });
 
 const manifest: PdfMapManifest = {
