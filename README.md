@@ -6,6 +6,7 @@
 
 - `pdf-mapview` — shared types, manifest helpers, schemas (browser + server safe)
 - `pdf-mapview/client` — React viewer runtime (browser only)
+- `pdf-mapview/native` — Expo / React Native tile viewer runtime for prebuilt manifests
 - `pdf-mapview/ingest` — Node ingest APIs, storage adapters, CLI
 - `pdf-mapview/server` — server-safe re-export of the ingest toolkit (use from TanStack Start server functions, Next.js route handlers, etc.)
 
@@ -18,6 +19,45 @@ The ingest pipeline is pure Node and uses prebuilt npm modules. PDF pages are ra
 ```bash
 npm install pdf-mapview react react-dom
 ```
+
+## Expo / React Native tile viewer
+
+Mobile apps should render prebuilt tile manifests produced by `pdf-mapview/ingest`
+or `pdf-mapview/server`. The native runtime does not ingest PDFs, rasterize pages,
+or generate tiles on-device.
+
+```sh
+npx expo install @shopify/react-native-skia react-native-gesture-handler react-native-reanimated react-native-worklets
+```
+
+```tsx
+import { useRef } from "react";
+import { TileMapNative, type NativeMapApi } from "pdf-mapview/native";
+
+export function FloorPlanScreen({ manifest }: { manifest: any }) {
+  const mapRef = useRef<NativeMapApi>(null);
+
+  return (
+    <TileMapNative
+      ref={mapRef}
+      source={{
+        type: "tiles",
+        manifest,
+        baseUrl: "https://cdn.example.com/maps/site-plan-001/",
+      }}
+      onRegionClick={(region) => {
+        mapRef.current?.zoomToRegion(region.id);
+      }}
+      style={{ flex: 1 }}
+    />
+  );
+}
+```
+
+`pdf-mapview/native` supports tile sources only. Passing raw `pdf` or `image`
+sources throws a clear error so mobile apps stay on the server-generated tile
+path. Signed or short-lived tile URLs are supported with the same `getTileUrl`
+hook used by the web viewer.
 
 ## Viewer usage
 

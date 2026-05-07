@@ -51,6 +51,11 @@
       "import": "./dist/client/index.js",
       "require": "./dist/client/index.cjs"
     },
+    "./native": {
+      "types": "./dist/native/index.d.ts",
+      "import": "./dist/native/index.js",
+      "require": "./dist/native/index.cjs"
+    },
     "./ingest": {
       "types": "./dist/ingest/index.d.ts",
       "import": "./dist/ingest/index.js",
@@ -69,6 +74,21 @@
     },
     "react-dom": {
       "optional": true
+    },
+    "react-native": {
+      "optional": true
+    },
+    "@shopify/react-native-skia": {
+      "optional": true
+    },
+    "react-native-gesture-handler": {
+      "optional": true
+    },
+    "react-native-reanimated": {
+      "optional": true
+    },
+    "react-native-worklets": {
+      "optional": true
     }
   },
   "scripts": {
@@ -81,8 +101,13 @@
     "clean": "rm -rf dist coverage .vitest"
   },
   "peerDependencies": {
+    "@shopify/react-native-skia": ">=2.0.0",
     "react": "^18.3.0 || ^19.0.0",
-    "react-dom": "^18.3.0 || ^19.0.0"
+    "react-dom": "^18.3.0 || ^19.0.0",
+    "react-native": ">=0.76.0",
+    "react-native-gesture-handler": ">=2.0.0",
+    "react-native-reanimated": ">=3.0.0",
+    "react-native-worklets": ">=0.5.0"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.67",
