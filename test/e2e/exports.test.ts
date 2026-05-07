@@ -1,4 +1,36 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("react-native", () => ({
+  PanResponder: {
+    create: () => ({ panHandlers: {} }),
+  },
+  StyleSheet: {
+    absoluteFill: {},
+    create: <T extends Record<string, unknown>>(styles: T) => styles,
+  },
+  View: "View",
+}));
+
+vi.mock("@shopify/react-native-skia", () => ({
+  Canvas: "Canvas",
+  Circle: "Circle",
+  Group: "Group",
+  Image: "Image",
+  Path: "Path",
+  Rect: "Rect",
+  Text: "Text",
+  Skia: {
+    Path: {
+      Make: () => ({
+        moveTo: vi.fn(),
+        lineTo: vi.fn(),
+        close: vi.fn(),
+      }),
+    },
+  },
+  useFont: () => null,
+  useImage: () => null,
+}));
 
 describe("package boundaries", () => {
   it("imports shared exports in a node process", async () => {
@@ -17,5 +49,12 @@ describe("package boundaries", () => {
     const mod = await import("../../src/server/index");
     expect(mod.ingestImage).toBeTypeOf("function");
     expect(mod.ingestPdf).toBeTypeOf("function");
+  });
+
+  it("imports native exports with native peers mocked", async () => {
+    const mod = await import("../../src/native/index");
+    expect(mod.TileMapNative).toBeTypeOf("object");
+    expect(mod.PdfMapNative).toBe(mod.TileMapNative);
+    expect(mod.getNativeVisibleTiles).toBeTypeOf("function");
   });
 });

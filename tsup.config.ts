@@ -5,6 +5,7 @@ export default defineConfig([
     entry: {
       "shared/index": "src/shared/index.ts",
       "client/index": "src/client/index.ts",
+      "native/index": "src/native/index.ts",
       "ingest/index": "src/ingest/index.ts",
       "ingest/cli": "src/ingest/cli.ts",
       "server/index": "src/server/index.ts",
@@ -18,7 +19,15 @@ export default defineConfig([
     outDir: "dist",
     treeshake: true,
     minify: false,
-    external: ["react", "react-dom"],
+    external: [
+      "react",
+      "react-dom",
+      "react-native",
+      "@shopify/react-native-skia",
+      "react-native-gesture-handler",
+      "react-native-reanimated",
+      "react-native-worklets",
+    ],
     onSuccess: "node scripts/copy-pdf-worker.mjs",
   },
 ]);
