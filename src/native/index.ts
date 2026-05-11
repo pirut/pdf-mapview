@@ -6,6 +6,7 @@ export {
   getNativeTileLevel,
   getNativeTileKey,
   getNativeVisibleTiles,
+  getTargetTileScale,
   nativeTileExists,
   resolveNativeTileUrl,
 } from "./core/nativeTiles";

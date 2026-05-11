@@ -300,13 +300,15 @@ export const TileMapNative = forwardRef<NativeMapApi, TileMapNativeProps>(functi
           {tiles.map((tile) => (
             <TileImage key={tile.id} tile={tile} />
           ))}
-          <NativeOverlayLayer
-            manifest={manifest}
-            view={view}
-            regions={regions}
-            selectedRegionId={props.selectedRegionId}
-            hoveredRegionId={hoveredRegionId}
-          />
+          {props.renderRegionOverlay ? null : (
+            <NativeOverlayLayer
+              manifest={manifest}
+              view={view}
+              regions={regions}
+              selectedRegionId={props.selectedRegionId}
+              hoveredRegionId={hoveredRegionId}
+            />
+          )}
         </Canvas>
         <NativeCustomOverlayLayer
           manifest={manifest}

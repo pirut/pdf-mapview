@@ -5,6 +5,7 @@ export default defineConfig([
     entry: {
       "shared/index": "src/shared/index.ts",
       "client/index": "src/client/index.ts",
+      "web-worker/index": "src/web-worker/index.ts",
       "native/index": "src/native/index.ts",
       "ingest/index": "src/ingest/index.ts",
       "ingest/cli": "src/ingest/cli.ts",

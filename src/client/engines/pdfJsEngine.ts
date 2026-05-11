@@ -1,5 +1,5 @@
 import { toUint8Array } from "../../shared/bytes";
-import { pdfWorkerUrl } from "../../shared/pdfWorkerUrl";
+import { pdfWorkerUrl } from "../../web-worker";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist/types/src/display/api";
 
 import { clamp01 } from "../../shared/coordinates";
@@ -30,7 +30,7 @@ export async function createPdfJsEngine(options: EngineInitOptions): Promise<Vie
   const workerSrc = options.source.workerSrc ?? pdfWorkerUrl;
   if (!workerSrc) {
     throw new Error(
-      "PDF sources require a configured worker URL. Pass source.workerSrc or use pdfWorkerUrl from pdf-mapview.",
+      "PDF sources require a configured worker URL. Pass source.workerSrc or use pdfWorkerUrl from pdf-mapview/web-worker.",
     );
   }
   pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;

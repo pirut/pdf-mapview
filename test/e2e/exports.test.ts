@@ -36,12 +36,17 @@ describe("package boundaries", () => {
   it("imports shared exports in a node process", async () => {
     const mod = await import("../../src/shared/index");
     expect(mod.parseManifest).toBeTypeOf("function");
-    expect(mod.pdfWorkerUrl).toBeTypeOf("string");
+    expect("pdfWorkerUrl" in mod).toBe(false);
   });
 
   it("imports client exports in a node process without touching browser globals at module scope", async () => {
     const mod = await import("../../src/client/index");
     expect(mod.TileMapViewer).toBeTypeOf("object");
+    expect(mod.pdfWorkerUrl).toBeTypeOf("string");
+  });
+
+  it("imports web worker exports from the web-only subpath", async () => {
+    const mod = await import("../../src/web-worker/index");
     expect(mod.pdfWorkerUrl).toBeTypeOf("string");
   });
 

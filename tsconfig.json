@@ -16,6 +16,7 @@
     "paths": {
       "pdf-mapview": ["./src/shared/index.ts"],
       "pdf-mapview/client": ["./src/client/index.ts"],
+      "pdf-mapview/web-worker": ["./src/web-worker/index.ts"],
       "pdf-mapview/native": ["./src/native/index.ts"],
       "pdf-mapview/ingest": ["./src/ingest/index.ts"],
       "pdf-mapview/server": ["./src/server/index.ts"]

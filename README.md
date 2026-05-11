@@ -158,7 +158,7 @@ Pass `getTileUrl` on the tile source to compute each tile URL at request time �
 ### PDF fallback source
 
 ```tsx
-import { pdfWorkerUrl } from "pdf-mapview";
+import { pdfWorkerUrl } from "pdf-mapview/web-worker";
 
 <TileMapViewer
   source={{
@@ -623,7 +623,7 @@ The S3-compatible adapter already sets cache headers; match them on any custom b
 
 ## PDF worker hosting
 
-The PDF fallback (and PDF ingest on the server) uses `pdfjs-dist`, which requires a worker bundle. `pdf-mapview` exports `pdfWorkerUrl`, a `new URL(...)` reference to the copy in `dist/pdf.worker.min.mjs`.
+The PDF fallback (and PDF ingest on the server) uses `pdfjs-dist`, which requires a worker bundle. `pdf-mapview/web-worker` exports `pdfWorkerUrl`, a `new URL(...)` reference to the copy in `dist/pdf.worker.min.mjs`.
 
 - **Vite, TanStack Start** — `new URL(..., import.meta.url)` is understood natively; `pdfWorkerUrl` resolves to a hashed asset in your build output.
 - **Next.js App Router / Turbopack** — same; no extra config needed.

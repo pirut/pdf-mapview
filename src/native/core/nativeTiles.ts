@@ -30,6 +30,8 @@ export interface NativeVisibleTilesOptions {
   overscan?: number;
 }
 
+export type NativeTileLevelInput = MapViewState | number;
+
 export interface ResolveNativeTileUrlOptions {
   source: TilesSource;
   z: number;
@@ -63,21 +65,50 @@ export function assertNativeTilesSource(source: PdfMapSource): TilesSource {
   );
 }
 
-export function getNativeTileLevel(manifest: PdfMapManifest, zoom: number): TileLevelManifest {
+export function getNativeTileLevel(
+  manifest: PdfMapManifest,
+  viewOrZoom: NativeTileLevelInput,
+): TileLevelManifest {
   const levels = [...manifest.tiles.levels].sort((left, right) => left.z - right.z);
   if (levels.length === 0) {
     throw new Error(`Manifest "${manifest.id}" does not include any tile levels.`);
   }
 
-  const targetScale = getTargetTileScale(manifest, zoom);
+  const targetScale = getTargetTileScale(manifest, viewOrZoom);
   let best = levels[0];
   let bestDistance = Number.POSITIVE_INFINITY;
 
+  if (typeof viewOrZoom === "number") {
+    for (const level of levels) {
+      const distance = Math.abs(level.scale - targetScale);
+      if (distance < bestDistance || (distance === bestDistance && level.z > best.z)) {
+        best = level;
+        bestDistance = distance;
+      }
+    }
+
+    return best;
+  }
+
   for (const level of levels) {
+    if (level.scale + 0.000000001 < targetScale) {
+      continue;
+    }
+
     const distance = Math.abs(level.scale - targetScale);
-    if (distance < bestDistance || (distance === bestDistance && level.z > best.z)) {
+    if (distance < bestDistance || (distance === bestDistance && level.z < best.z)) {
       best = level;
       bestDistance = distance;
+    }
+  }
+
+  if (bestDistance === Number.POSITIVE_INFINITY) {
+    for (const level of levels) {
+      const distance = Math.abs(level.scale - targetScale);
+      if (distance < bestDistance || (distance === bestDistance && level.z > best.z)) {
+        best = level;
+        bestDistance = distance;
+      }
     }
   }
 
@@ -87,9 +118,55 @@ export function getNativeTileLevel(manifest: PdfMapManifest, zoom: number): Tile
 export function getNativeVisibleTiles(options: NativeVisibleTilesOptions): NativeTileDescriptor[] {
   const { source, view } = options;
   const manifest = source.manifest;
-  const level = getNativeTileLevel(manifest, view.zoom);
+  const activeLevel = getNativeTileLevel(manifest, view);
   const transform = getNativeViewportTransform(manifest, view);
   const overscan = options.overscan ?? manifest.tiles.tileSize;
+  const descriptors = getNativeVisibleTileLevels(manifest, activeLevel).flatMap((level) =>
+    getNativeTileDescriptorsForLevel({
+      manifest,
+      view,
+      transform,
+      level,
+      overscan,
+    }),
+  );
+
+  descriptors.sort((left, right) => {
+    const leftDistance = distanceToViewportCenter(left, view);
+    const rightDistance = distanceToViewportCenter(right, view);
+    return (
+      left.z - right.z ||
+      leftDistance - rightDistance ||
+      left.y - right.y ||
+      left.x - right.x
+    );
+  });
+
+  return descriptors;
+}
+
+function getNativeVisibleTileLevels(
+  manifest: PdfMapManifest,
+  activeLevel: TileLevelManifest,
+): TileLevelManifest[] {
+  const levels = [...manifest.tiles.levels].sort((left, right) => left.z - right.z);
+  const activeIndex = levels.findIndex((level) => level.z === activeLevel.z);
+
+  if (activeIndex <= 0) {
+    return [activeLevel];
+  }
+
+  return [levels[activeIndex - 1], activeLevel];
+}
+
+function getNativeTileDescriptorsForLevel(options: {
+  manifest: PdfMapManifest;
+  view: MapViewState;
+  transform: NativeViewportTransform;
+  level: TileLevelManifest;
+  overscan: number;
+}): NativeTileDescriptor[] {
+  const { manifest, view, transform, level, overscan } = options;
   const tileWidth = manifest.tiles.tileSize / level.scale;
   const tileHeight = manifest.tiles.tileSize / level.scale;
   const visible = getVisibleSourceRect(transform, view, overscan);
@@ -122,12 +199,6 @@ export function getNativeVisibleTiles(options: NativeVisibleTilesOptions): Nativ
       });
     }
   }
-
-  descriptors.sort((left, right) => {
-    const leftDistance = distanceToViewportCenter(left, view);
-    const rightDistance = distanceToViewportCenter(right, view);
-    return leftDistance - rightDistance || left.z - right.z || left.y - right.y || left.x - right.x;
-  });
 
   return descriptors;
 }
@@ -187,12 +258,37 @@ function getVisibleSourceRect(
   };
 }
 
-function getTargetTileScale(manifest: PdfMapManifest, zoom: number): number {
+export function getTargetTileScale(
+  manifest: PdfMapManifest,
+  viewOrZoom: NativeTileLevelInput,
+): number {
   const maxLevel = manifest.tiles.levels.reduce(
     (current, level) => (level.scale > current.scale ? level : current),
     manifest.tiles.levels[0],
   );
-  return Math.max(0.000001, Math.min(maxLevel.scale, zoom * maxLevel.scale));
+
+  if (typeof viewOrZoom === "number") {
+    return Math.max(0.000001, Math.min(maxLevel.scale, viewOrZoom * maxLevel.scale));
+  }
+
+  const view = viewOrZoom;
+  const sourceWidth = manifest.source.width;
+  const sourceHeight = manifest.source.height;
+  const containerWidth = view?.containerWidth ?? 0;
+  const containerHeight = view?.containerHeight ?? 0;
+  const zoom = view?.zoom ?? 1;
+
+  if (
+    containerWidth <= 0 ||
+    containerHeight <= 0 ||
+    sourceWidth <= 0 ||
+    sourceHeight <= 0
+  ) {
+    return Math.max(0.000001, Math.min(maxLevel.scale, zoom * maxLevel.scale));
+  }
+
+  const baseScale = Math.min(containerWidth / sourceWidth, containerHeight / sourceHeight);
+  return Math.max(0.000001, Math.min(maxLevel.scale, baseScale * zoom));
 }
 
 function distanceToViewportCenter(tile: NativeTileDescriptor, view: MapViewState): number {

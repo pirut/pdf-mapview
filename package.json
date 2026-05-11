@@ -1,6 +1,6 @@
 {
   "name": "pdf-mapview",
-  "version": "0.4.4-dev.1",
+  "version": "0.4.4-dev.2",
   "description": "React viewer and ingest toolkit for map-like PDF, floorplan, and large image experiences.",
   "keywords": [
     "pdf",
@@ -50,6 +50,11 @@
       "types": "./dist/client/index.d.ts",
       "import": "./dist/client/index.js",
       "require": "./dist/client/index.cjs"
+    },
+    "./web-worker": {
+      "types": "./dist/web-worker/index.d.ts",
+      "import": "./dist/web-worker/index.js",
+      "require": "./dist/web-worker/index.cjs"
     },
     "./native": {
       "types": "./dist/native/index.d.ts",

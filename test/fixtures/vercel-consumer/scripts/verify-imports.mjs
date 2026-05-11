@@ -1,5 +1,6 @@
-import { parseManifest, pdfWorkerUrl } from "pdf-mapview";
+import { parseManifest } from "pdf-mapview";
 import { TileMapViewer } from "pdf-mapview/client";
+import { pdfWorkerUrl } from "pdf-mapview/web-worker";
 import { ingestPdf } from "pdf-mapview/server";
 
 if (typeof TileMapViewer !== "object") {
