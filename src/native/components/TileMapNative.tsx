@@ -31,6 +31,13 @@ import {
   resolveNativeTileUrl,
 } from "../core/nativeTiles";
 import type { NativeTileDescriptor } from "../core/nativeTiles";
+import {
+  areNativeTileListsEqual,
+  areNativeViewsEqual,
+  isNativeLayoutSizeEqual,
+  shouldRenderNativeDefaultOverlay,
+  withNativeTileUri,
+} from "../core/nativeStateGuards";
 import { hitTestNativeRegions, getNativeRegionBounds } from "../core/nativeHitTesting";
 import { NativeMemoryTileCache } from "../core/nativeTileCache";
 import { NativeMapRuntimeContext } from "../runtimeContext";
@@ -52,6 +59,7 @@ export const TileMapNative = forwardRef<NativeMapApi, TileMapNativeProps>(functi
   const onRegionHoverRef = useRef(props.onRegionHover);
   const onTileLoadRef = useRef(props.onTileLoad);
   const onErrorRef = useRef(props.onError);
+  const cacheOptionsRef = useRef(props.cache);
   const cacheRef = useRef(new NativeMemoryTileCache(props.cache));
   const [view, setViewState] = useState<MapViewState>(() =>
     resolveNativeInitialView({
@@ -64,7 +72,9 @@ export const TileMapNative = forwardRef<NativeMapApi, TileMapNativeProps>(functi
   );
   const viewRef = useRef(view);
   const [tiles, setTiles] = useState<NativeTileDescriptor[]>([]);
+  const tilesRef = useRef<NativeTileDescriptor[]>([]);
   const [hoveredRegionId, setHoveredRegionId] = useState<string | null>(null);
+  const hoveredRegionIdRef = useRef<string | null>(null);
   const gestureRef = useRef({
     lastDistance: 0,
     lastDx: 0,
@@ -80,15 +90,56 @@ export const TileMapNative = forwardRef<NativeMapApi, TileMapNativeProps>(functi
   onRegionHoverRef.current = props.onRegionHover;
   onTileLoadRef.current = props.onTileLoad;
   onErrorRef.current = props.onError;
+  cacheOptionsRef.current = props.cache;
 
   useEffect(() => {
-    cacheRef.current = new NativeMemoryTileCache(props.cache);
-  }, [props.cache]);
+    cacheRef.current = new NativeMemoryTileCache(cacheOptionsRef.current);
+  }, [
+    props.cache?.adapter,
+    props.cache?.enabled,
+    props.cache?.maxMemoryEntries,
+    props.cache?.namespace,
+    props.cache?.persist,
+  ]);
 
   const publishView = useCallback((nextView: MapViewState) => {
+    const currentView = viewRef.current;
+    if (areNativeViewsEqual(currentView, nextView)) {
+      return;
+    }
+
     viewRef.current = nextView;
     setViewState(nextView);
     onViewChangeRef.current?.(nextView);
+  }, []);
+
+  const setTilesIfChanged = useCallback((nextTiles: NativeTileDescriptor[]) => {
+    if (areNativeTileListsEqual(tilesRef.current, nextTiles)) {
+      return;
+    }
+
+    tilesRef.current = nextTiles;
+    setTiles(nextTiles);
+  }, []);
+
+  const publishTileUri = useCallback((tileId: string, uri: string) => {
+    const current = tilesRef.current;
+    const next = withNativeTileUri(current, tileId, uri);
+    if (next === current) {
+      return;
+    }
+
+    tilesRef.current = next;
+    setTiles(next);
+  }, []);
+
+  const publishHoveredRegion = useCallback((nextHoveredRegionId: string | null) => {
+    if (hoveredRegionIdRef.current === nextHoveredRegionId) {
+      return;
+    }
+
+    hoveredRegionIdRef.current = nextHoveredRegionId;
+    setHoveredRegionId(nextHoveredRegionId);
   }, []);
 
   const mapApi = useMemo<NativeMapApi>(
@@ -129,23 +180,27 @@ export const TileMapNative = forwardRef<NativeMapApi, TileMapNativeProps>(functi
   const visibleTiles = useMemo(
     () =>
       getNativeVisibleTiles({
-        source,
+        source: {
+          type: "tiles",
+          manifest,
+        },
         view,
         overscan: props.overscan,
       }),
-    [props.overscan, source, view],
+    [manifest, props.overscan, view],
   );
 
   useEffect(() => {
     const abortController = new AbortController();
+    const currentTilesById = new Map(tilesRef.current.map((tile) => [tile.id, tile]));
     const nextTiles = visibleTiles.map((tile) => {
       const cacheKey = getNativeTileKey(manifest, tile.z, tile.x, tile.y);
       return {
         ...tile,
-        uri: cacheRef.current.get(cacheKey),
+        uri: cacheRef.current.get(cacheKey) ?? currentTilesById.get(tile.id)?.uri,
       };
     });
-    setTiles(nextTiles);
+    setTilesIfChanged(nextTiles);
 
     void Promise.all(
       nextTiles.map(async (tile) => {
@@ -160,15 +215,15 @@ export const TileMapNative = forwardRef<NativeMapApi, TileMapNativeProps>(functi
 
         try {
           const cacheKey = getNativeTileKey(manifest, tile.z, tile.x, tile.y);
-          const cachedUri = await props.cache?.adapter?.get(cacheKey);
+          const cachedUri = await cacheOptionsRef.current?.adapter?.get(cacheKey);
+          if (abortController.signal.aborted) {
+            onTileLoadRef.current?.({ tile, status: "cancelled" });
+            return;
+          }
           if (cachedUri) {
             cacheRef.current.set(cacheKey, cachedUri);
             onTileLoadRef.current?.({ tile, status: "loaded", uri: cachedUri });
-            setTiles((current) =>
-              current.map((candidate) =>
-                candidate.id === tile.id ? { ...candidate, uri: cachedUri } : candidate,
-              ),
-            );
+            publishTileUri(tile.id, cachedUri);
             return;
           }
 
@@ -185,15 +240,15 @@ export const TileMapNative = forwardRef<NativeMapApi, TileMapNativeProps>(functi
           }
 
           cacheRef.current.set(cacheKey, uri);
-          if (props.cache?.adapter) {
-            await props.cache.adapter.set?.(cacheKey, uri);
+          if (cacheOptionsRef.current?.adapter) {
+            await cacheOptionsRef.current.adapter.set?.(cacheKey, uri);
+          }
+          if (abortController.signal.aborted) {
+            onTileLoadRef.current?.({ tile, status: "cancelled" });
+            return;
           }
           onTileLoadRef.current?.({ tile, status: "loaded", uri });
-          setTiles((current) =>
-            current.map((candidate) =>
-              candidate.id === tile.id ? { ...candidate, uri } : candidate,
-            ),
-          );
+          publishTileUri(tile.id, uri);
         } catch (error) {
           if (abortController.signal.aborted) {
             onTileLoadRef.current?.({ tile, status: "cancelled" });
@@ -208,7 +263,7 @@ export const TileMapNative = forwardRef<NativeMapApi, TileMapNativeProps>(functi
     return () => {
       abortController.abort();
     };
-  }, [manifest, props.cache, visibleTiles]);
+  }, [manifest, publishTileUri, setTilesIfChanged, visibleTiles]);
 
   const handlePointer = useCallback(
     (screenPoint: ScreenPoint, nativeEvent: unknown, emitClick: boolean) => {
@@ -223,13 +278,13 @@ export const TileMapNative = forwardRef<NativeMapApi, TileMapNativeProps>(functi
         nativeEvent: nativeEvent as MapPointerEvent["nativeEvent"],
       };
 
-      setHoveredRegionId(region?.id ?? null);
+      publishHoveredRegion(region?.id ?? null);
       onRegionHoverRef.current?.(region, event);
       if (emitClick && region) {
         onRegionClickRef.current?.(region, event);
       }
     },
-    [manifest],
+    [manifest, publishHoveredRegion],
   );
 
   const panResponder = useMemo(
@@ -292,6 +347,10 @@ export const TileMapNative = forwardRef<NativeMapApi, TileMapNativeProps>(functi
         {...panResponder.panHandlers}
         onLayout={(event: { nativeEvent: { layout: { width: number; height: number } } }) => {
           const { width, height } = event.nativeEvent.layout;
+          if (isNativeLayoutSizeEqual(viewRef.current, { width, height })) {
+            return;
+          }
+
           publishView(resizeNativeView(viewRef.current, { width, height }));
         }}
         style={[styles.container, props.style]}
@@ -300,7 +359,7 @@ export const TileMapNative = forwardRef<NativeMapApi, TileMapNativeProps>(functi
           {tiles.map((tile) => (
             <TileImage key={tile.id} tile={tile} />
           ))}
-          {props.renderRegionOverlay ? null : (
+          {shouldRenderNativeDefaultOverlay(props.renderRegionOverlay) ? (
             <NativeOverlayLayer
               manifest={manifest}
               view={view}
@@ -308,7 +367,7 @@ export const TileMapNative = forwardRef<NativeMapApi, TileMapNativeProps>(functi
               selectedRegionId={props.selectedRegionId}
               hoveredRegionId={hoveredRegionId}
             />
-          )}
+          ) : null}
         </Canvas>
         <NativeCustomOverlayLayer
           manifest={manifest}

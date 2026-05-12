@@ -110,6 +110,57 @@ describe("native tile helpers", () => {
     expect(tiles.map((tile) => tile.z)).toEqual([1, 1, 2, 2, 2, 2]);
   });
 
+  it("projects tile descriptors from actual level dimensions instead of scale", () => {
+    const irregularManifest: PdfMapManifest = {
+      ...manifest,
+      id: "irregular-native-plan",
+      source: {
+        ...manifest.source,
+        width: 1000,
+        height: 800,
+      },
+      coordinateSpace: {
+        ...manifest.coordinateSpace,
+        width: 1000,
+        height: 800,
+      },
+      tiles: {
+        ...manifest.tiles,
+        maxZoom: 1,
+        levels: [
+          { z: 0, width: 240, height: 180, columns: 1, rows: 1, scale: 0.25 },
+          { z: 1, width: 480, height: 360, columns: 2, rows: 2, scale: 0.5 },
+        ],
+      },
+    };
+
+    const tiles = getNativeVisibleTiles({
+      source: {
+        type: "tiles",
+        manifest: irregularManifest,
+      },
+      view: createView({
+        zoom: 1,
+        maxZoom: 1,
+        containerWidth: 1000,
+        containerHeight: 800,
+      }),
+      overscan: 0,
+    });
+
+    const bottomRight = tiles.find((tile) => tile.z === 1 && tile.x === 1 && tile.y === 1);
+    const parent = tiles.find((tile) => tile.z === 0 && tile.x === 0 && tile.y === 0);
+
+    expect(parent?.left).toBeCloseTo(0);
+    expect(parent?.top).toBeCloseTo(0);
+    expect(parent?.width).toBeCloseTo(1000);
+    expect(parent?.height).toBeCloseTo(800);
+    expect(bottomRight?.left).toBeCloseTo(533.3333333333334);
+    expect(bottomRight?.top).toBeCloseTo(568.8888888888889);
+    expect(bottomRight?.width).toBeCloseTo(466.66666666666663);
+    expect(bottomRight?.height).toBeCloseTo(231.1111111111111);
+  });
+
   it("returns only active-level descriptors when active level is the minimum level", () => {
     const tiles = getNativeVisibleTiles({
       source: {

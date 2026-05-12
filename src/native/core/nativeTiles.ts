@@ -167,13 +167,23 @@ function getNativeTileDescriptorsForLevel(options: {
   overscan: number;
 }): NativeTileDescriptor[] {
   const { manifest, view, transform, level, overscan } = options;
-  const tileWidth = manifest.tiles.tileSize / level.scale;
-  const tileHeight = manifest.tiles.tileSize / level.scale;
+  const sourcePerLevelPixelX = manifest.source.width / level.width;
+  const sourcePerLevelPixelY = manifest.source.height / level.height;
   const visible = getVisibleSourceRect(transform, view, overscan);
-  const minX = Math.max(0, Math.floor(visible.x / tileWidth));
-  const maxX = Math.min(level.columns - 1, Math.floor((visible.x + visible.width) / tileWidth));
-  const minY = Math.max(0, Math.floor(visible.y / tileHeight));
-  const maxY = Math.min(level.rows - 1, Math.floor((visible.y + visible.height) / tileHeight));
+  const visibleLeft = visible.x / sourcePerLevelPixelX;
+  const visibleTop = visible.y / sourcePerLevelPixelY;
+  const visibleRight = (visible.x + visible.width) / sourcePerLevelPixelX;
+  const visibleBottom = (visible.y + visible.height) / sourcePerLevelPixelY;
+  const minX = Math.max(0, Math.floor(visibleLeft / manifest.tiles.tileSize));
+  const maxX = Math.min(
+    level.columns - 1,
+    Math.max(0, Math.ceil(visibleRight / manifest.tiles.tileSize) - 1),
+  );
+  const minY = Math.max(0, Math.floor(visibleTop / manifest.tiles.tileSize));
+  const maxY = Math.min(
+    level.rows - 1,
+    Math.max(0, Math.ceil(visibleBottom / manifest.tiles.tileSize) - 1),
+  );
   const descriptors: NativeTileDescriptor[] = [];
 
   for (let y = minY; y <= maxY; y += 1) {
@@ -182,10 +192,14 @@ function getNativeTileDescriptorsForLevel(options: {
         continue;
       }
 
-      const sourceLeft = x * tileWidth;
-      const sourceTop = y * tileHeight;
-      const sourceRight = Math.min(sourceLeft + tileWidth, manifest.source.width);
-      const sourceBottom = Math.min(sourceTop + tileHeight, manifest.source.height);
+      const levelLeft = x * manifest.tiles.tileSize;
+      const levelTop = y * manifest.tiles.tileSize;
+      const levelRight = Math.min(levelLeft + manifest.tiles.tileSize, level.width);
+      const levelBottom = Math.min(levelTop + manifest.tiles.tileSize, level.height);
+      const sourceLeft = levelLeft * sourcePerLevelPixelX;
+      const sourceTop = levelTop * sourcePerLevelPixelY;
+      const sourceRight = levelRight * sourcePerLevelPixelX;
+      const sourceBottom = levelBottom * sourcePerLevelPixelY;
 
       descriptors.push({
         id: getNativeTileKey(manifest, level.z, x, y),
